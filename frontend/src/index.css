@@ -1,0 +1,20 @@
+@import "tailwindcss";
+
+:root {
+  --poker-green: #1a472a;
+  --poker-green-dark: #0d2818;
+  --poker-felt: #2d5a3f;
+  --poker-gold: #c9a84c;
+  --poker-red: #b91c1c;
+}
+
+body {
+  @apply bg-gray-950 text-gray-100 min-h-screen;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  touch-action: manipulation;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
