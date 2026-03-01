@@ -1,34 +1,32 @@
-.PHONY: up down build logs backend-logs frontend-logs mongo-logs test lint
+.PHONY: dev dev-backend dev-frontend mongo mongo-stop test lint clean
 
-up:
-	docker-compose up -d
+# Start MongoDB, backend, and frontend
+dev: mongo dev-backend dev-frontend
 
-up-build:
-	docker-compose up -d --build
+# Run backend with go run
+dev-backend:
+	cd backend && go run ./cmd/server
 
-down:
+# Run frontend dev server
+dev-frontend:
+	cd frontend && npm run dev
+
+# Start MongoDB in Docker
+mongo:
+	docker-compose up -d mongo
+
+# Stop MongoDB
+mongo-stop:
 	docker-compose down
 
-build:
-	docker-compose build
-
-logs:
-	docker-compose logs -f
-
-backend-logs:
-	docker-compose logs -f backend
-
-frontend-logs:
-	docker-compose logs -f frontend
-
-mongo-logs:
-	docker-compose logs -f mongo
-
+# Run backend tests
 test:
 	cd backend && go test ./...
 
+# Lint backend
 lint:
 	cd backend && go vet ./...
 
+# Stop MongoDB and remove volumes
 clean:
 	docker-compose down -v
