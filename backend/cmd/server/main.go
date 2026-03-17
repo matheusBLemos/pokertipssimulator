@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sort"
 	"strings"
 	"syscall"
 	"time"
@@ -97,7 +98,7 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 
 	go func() {
-		if err := app.Listen(":" + cfg.Port); err != nil {
+		if err := app.Listen("0.0.0.0:" + cfg.Port); err != nil {
 			log.Fatalf("failed to start server: %v", err)
 		}
 	}()
@@ -114,7 +115,11 @@ func main() {
 }
 
 func printAccessInfo(port string) {
-	localIP := getLocalIP()
+	localIPs := getLocalIPs()
+	localIP := ""
+	if len(localIPs) > 0 {
+		localIP = localIPs[0]
+	}
 	publicIP := getPublicIP()
 
 	fmt.Println()
@@ -132,19 +137,124 @@ func printAccessInfo(port string) {
 	}
 	fmt.Println("  └──────────────────────────────────────────────┘")
 	fmt.Println()
+
+	if len(localIPs) > 1 {
+		fmt.Println("  Other LAN addresses:")
+		for _, ip := range localIPs[1:] {
+			fmt.Printf("    - http://%s:%s\n", ip, port)
+		}
+		fmt.Println()
+	}
 }
 
-func getLocalIP() string {
-	addrs, err := net.InterfaceAddrs()
+func getLocalIPs() []string {
+	ifaces, err := net.Interfaces()
 	if err != nil {
-		return ""
+		return nil
 	}
-	for _, addr := range addrs {
-		if ipNet, ok := addr.(*net.IPNet); ok && !ipNet.IP.IsLoopback() && ipNet.IP.To4() != nil {
-			return ipNet.IP.String()
+
+	type candidate struct {
+		ip    string
+		score int
+	}
+
+	candidates := make([]candidate, 0)
+	seen := make(map[string]struct{})
+
+	for _, iface := range ifaces {
+		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+		if shouldIgnoreInterface(iface.Name) {
+			continue
+		}
+
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+
+		for _, addr := range addrs {
+			ipNet, ok := addr.(*net.IPNet)
+			if !ok {
+				continue
+			}
+
+			ip := ipNet.IP.To4()
+			if ip == nil || ip.IsLoopback() {
+				continue
+			}
+
+			ipStr := ip.String()
+			if _, ok := seen[ipStr]; ok {
+				continue
+			}
+			seen[ipStr] = struct{}{}
+
+			score := 0
+			if isPrivateIPv4(ip) {
+				score += 100
+			}
+			if iface.Flags&net.FlagPointToPoint != 0 {
+				score -= 50
+			}
+
+			lowerName := strings.ToLower(iface.Name)
+			switch {
+			case strings.HasPrefix(lowerName, "en0"):
+				score += 60
+			case strings.HasPrefix(lowerName, "en"),
+				strings.HasPrefix(lowerName, "eth"),
+				strings.HasPrefix(lowerName, "wlan"),
+				strings.HasPrefix(lowerName, "wl"):
+				score += 40
+			}
+
+			if strings.HasPrefix(ipStr, "169.254.") {
+				score -= 100
+			}
+
+			candidates = append(candidates, candidate{ip: ipStr, score: score})
 		}
 	}
-	return ""
+
+	sort.Slice(candidates, func(i, j int) bool {
+		if candidates[i].score == candidates[j].score {
+			return candidates[i].ip < candidates[j].ip
+		}
+		return candidates[i].score > candidates[j].score
+	})
+
+	localIPs := make([]string, 0, len(candidates))
+	for _, c := range candidates {
+		localIPs = append(localIPs, c.ip)
+	}
+	return localIPs
+}
+
+func shouldIgnoreInterface(name string) bool {
+	lower := strings.ToLower(name)
+	ignoredPrefixes := []string{
+		"lo", "utun", "bridge", "docker", "br-", "veth",
+		"awdl", "llw", "anpi", "tap", "tun", "wg",
+		"tailscale", "vboxnet", "vmnet",
+	}
+	for _, prefix := range ignoredPrefixes {
+		if strings.HasPrefix(lower, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+func isPrivateIPv4(ip net.IP) bool {
+	v4 := ip.To4()
+	if v4 == nil {
+		return false
+	}
+	return v4[0] == 10 ||
+		(v4[0] == 172 && v4[1] >= 16 && v4[1] <= 31) ||
+		(v4[0] == 192 && v4[1] == 168)
 }
 
 func getPublicIP() string {
