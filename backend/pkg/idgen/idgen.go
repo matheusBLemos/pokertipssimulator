@@ -4,13 +4,13 @@ import (
 	"crypto/rand"
 	"math/big"
 
-	"go.mongodb.org/mongo-driver/bson/primitive"
+	"github.com/google/uuid"
 )
 
 const codeChars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 
 func NewID() string {
-	return primitive.NewObjectID().Hex()
+	return uuid.New().String()
 }
 
 func NewRoomCode() string {
