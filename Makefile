@@ -1,5 +1,6 @@
 .PHONY: dev dev-backend dev-frontend test lint clean \
-       build-frontend embed-frontend build-all build-windows build-mac build-linux
+       build-frontend embed-frontend build-all build-windows build-mac build-linux \
+       wails-dev wails-build wails-build-mac wails-build-windows wails-build-linux
 
 # ── Development ──────────────────────────────────────────────
 
@@ -11,6 +12,9 @@ dev-backend:
 dev-frontend:
 	cd frontend && npm run dev
 
+wails-dev:
+	wails dev
+
 test:
 	go test ./...
 
@@ -18,9 +22,23 @@ lint:
 	go vet ./...
 
 clean:
-	rm -rf build/windows build/mac build/linux
+	rm -rf build/windows build/mac build/linux build/bin
 
-# ── Build ────────────────────────────────────────────────────
+# ── Wails Build (Desktop App) ───────────────────────────────
+
+wails-build:
+	wails build
+
+wails-build-mac:
+	wails build -platform darwin/arm64
+
+wails-build-windows:
+	wails build -platform windows/amd64
+
+wails-build-linux:
+	wails build -platform linux/amd64
+
+# ── Headless Build (Server Only) ────────────────────────────
 
 BINARY_NAME := pokertips
 

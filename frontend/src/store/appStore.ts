@@ -3,7 +3,7 @@ import { create } from 'zustand';
 type AppMode = 'tips' | 'game';
 type ServerStatus = 'stopped' | 'starting' | 'running' | 'error';
 
-interface ConnectionInfo {
+export interface ConnectionInfo {
   localIP: string;
   publicIP: string;
   port: number;
@@ -14,9 +14,11 @@ interface AppState {
   mode: AppMode | null;
   serverStatus: ServerStatus;
   connectionInfo: ConnectionInfo | null;
+  serverAddress: string | null;
   setMode: (mode: AppMode) => void;
   setServerStatus: (status: ServerStatus) => void;
   setConnectionInfo: (info: ConnectionInfo) => void;
+  setServerAddress: (address: string | null) => void;
   clearMode: () => void;
 }
 
@@ -24,6 +26,7 @@ export const useAppStore = create<AppState>((set) => ({
   mode: null,
   serverStatus: 'stopped',
   connectionInfo: null,
+  serverAddress: null,
 
   setMode: (mode) => {
     localStorage.setItem('poker_mode', mode);
@@ -34,8 +37,18 @@ export const useAppStore = create<AppState>((set) => ({
 
   setConnectionInfo: (connectionInfo) => set({ connectionInfo }),
 
+  setServerAddress: (serverAddress) => {
+    if (serverAddress) {
+      localStorage.setItem('poker_server_address', serverAddress);
+    } else {
+      localStorage.removeItem('poker_server_address');
+    }
+    set({ serverAddress });
+  },
+
   clearMode: () => {
     localStorage.removeItem('poker_mode');
-    set({ mode: null, serverStatus: 'stopped', connectionInfo: null });
+    localStorage.removeItem('poker_server_address');
+    set({ mode: null, serverStatus: 'stopped', connectionInfo: null, serverAddress: null });
   },
 }));

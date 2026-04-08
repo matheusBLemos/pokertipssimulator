@@ -6,6 +6,7 @@ import { useWebSocket } from '../../hooks/useWebSocket';
 import SeatPicker from '../../components/lobby/SeatPicker';
 import PlayerList from '../../components/lobby/PlayerList';
 import GameSettings from '../../components/lobby/GameSettings';
+import ConnectionInfoPanel from '../../components/shared/ConnectionInfo';
 import toast from 'react-hot-toast';
 
 export default function TipsLobbyPage() {
@@ -91,6 +92,10 @@ export default function TipsLobbyPage() {
           Copy Code
         </button>
       </div>
+
+      {isHost && (
+        <ConnectionInfoPanel roomCode={room.code} port={8080} />
+      )}
 
       <SeatPicker
         maxSeats={room.config.max_players}

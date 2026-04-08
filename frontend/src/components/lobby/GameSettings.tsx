@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { Room } from '../../types';
-import { api } from '../../services/api';
+import { getApiForMode } from '../../services/api';
 import { useRoomStore } from '../../store/roomStore';
 import toast from 'react-hot-toast';
 
@@ -19,7 +19,7 @@ export default function GameSettings({ room }: GameSettingsProps) {
 
   const handleSave = async () => {
     try {
-      const updated = await api.updateConfig(room.id, {
+      const updated = await getApiForMode(room.mode).updateConfig(room.id, {
         blind_structure: {
           levels: [{ small_blind: sb, big_blind: bb, ante: 0, duration: 0 }],
           current_level: 0,

@@ -5,13 +5,15 @@ import type {
   ActionType,
 } from '../types';
 import { useRoomStore } from '../store/roomStore';
+import { getBaseUrl } from '../utils/constants';
 
 function getToken(): string {
   return useRoomStore.getState().token ?? localStorage.getItem('poker_token') ?? '';
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const res = await fetch(path, {
+  const url = `${getBaseUrl()}${path}`;
+  const res = await fetch(url, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
@@ -131,3 +133,8 @@ export const tipsApi = {
     request<Room>(`/api/v1/tips/rooms/${roomId}/pause`, { method: 'POST' }),
 };
 
+export type SharedApi = ReturnType<typeof buildApi>;
+
+export function getApiForMode(mode?: string): SharedApi {
+  return mode === 'tips' ? sharedTips : sharedGame;
+}

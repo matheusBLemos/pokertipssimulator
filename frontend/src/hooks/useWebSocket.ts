@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { WebSocketClient } from '../services/wsClient';
 import { handleWSMessage } from '../services/wsMessageHandler';
-import { WS_URL } from '../utils/constants';
+import { getWsUrl } from '../utils/constants';
 
 export function useWebSocket(token: string | null) {
   const clientRef = useRef<WebSocketClient | null>(null);
@@ -9,7 +9,7 @@ export function useWebSocket(token: string | null) {
   useEffect(() => {
     if (!token) return;
 
-    const client = new WebSocketClient(WS_URL, token);
+    const client = new WebSocketClient(getWsUrl(), token);
     clientRef.current = client;
 
     const unsubscribe = client.onMessage(handleWSMessage);

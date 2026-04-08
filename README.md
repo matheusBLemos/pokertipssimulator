@@ -20,33 +20,43 @@ All players (including the host) communicate with the same Fiber server over HTT
 
 | Layer    | Technology                                              |
 |----------|---------------------------------------------------------|
-| Backend  | Go 1.25, Fiber v2, SQLite, JWT, WebSocket               |
+| Desktop  | Wails v2 (native window with WebView)                   |
+| Backend  | Go 1.25, Fiber v2, SQLite, JWT, WebSocket, UPnP        |
 | Frontend | React 19, TypeScript, Vite, TailwindCSS v4, Zustand     |
 
 ## Prerequisites
 
 - [Go 1.25+](https://go.dev/dl/)
-- [Node.js 20+](https://nodejs.org/) (for frontend development only)
+- [Node.js 20+](https://nodejs.org/)
+- [Wails CLI](https://wails.io/docs/gettingstarted/installation): `go install github.com/wailsapp/wails/v2/cmd/wails@latest`
+- macOS: Xcode Command Line Tools
+- Linux: `libgtk-3-dev libwebkit2gtk-4.0-dev`
+
+Verify your setup:
+
+```bash
+wails doctor
+```
 
 ## Quick Start (Development)
+
+### Desktop App (Wails)
+
+```bash
+wails dev
+```
+
+This starts the Go backend, Vite frontend with hot-reload, and opens a native desktop window.
+
+### Headless Server (no desktop window)
 
 Run the backend and frontend in two separate terminals:
 
 ```bash
 # Terminal 1 — Backend (from project root)
-go run ./cmd/server
-
-# Terminal 2 — Frontend
-cd frontend && npm install && npm run dev
-```
-
-Or use the Makefile:
-
-```bash
-# Terminal 1
 make dev-backend
 
-# Terminal 2
+# Terminal 2 — Frontend
 make dev-frontend
 ```
 
@@ -54,29 +64,51 @@ make dev-frontend
 - The Vite dev server starts on `http://localhost:5173` and proxies `/api` and `/ws` to the backend
 - On startup, the server prints your LAN and public IP so friends can connect
 
-## Production Build (Single Binary)
+## Production Build
 
-The production build automatically builds the React frontend, embeds it into the Go binary using `go:embed`, and produces a **single self-contained executable**. No Node.js, no separate frontend server, no database setup — just run the binary.
+### Desktop App (recommended)
 
-```bash
-# Build for all platforms at once
-make build-all
-
-# Or build for a specific platform (frontend is built automatically)
-make build-mac
-make build-linux
-make build-windows
-```
-
-Each target runs the full pipeline: `npm ci` + `npm run build` + copy to embed dir + `go build`.
-
-Binaries are output to `build/<platform>/`. Run directly:
+Wails builds a native executable with the frontend embedded:
 
 ```bash
-./build/mac/pokertips
+# Build for your current platform
+make wails-build
+
+# Or for a specific platform
+make wails-build-mac
+make wails-build-windows
+make wails-build-linux
 ```
 
-The binary serves both the API and the frontend on the same port. Open `http://localhost:8080` in a browser, or share the IP shown in the terminal with friends.
+Output: `build/bin/pokertips` (or `.exe` on Windows). Double-click to launch.
+
+### Headless Server
+
+For running without a desktop window (e.g., on a VPS or headless machine):
+
+```bash
+make build-mac    # or build-linux, build-windows, build-all
+```
+
+Output: `build/<platform>/pokertips`. Run and open `http://localhost:8080` in a browser.
+
+## Network Connectivity
+
+### LAN (same Wi-Fi)
+
+Works out of the box. The host shares their LAN IP (shown in the lobby) and friends connect.
+
+### Internet (different networks)
+
+The app attempts **UPnP automatic port mapping** on the host's router. If successful, friends can connect using the public IP shown in the lobby.
+
+If UPnP is unavailable:
+1. Forward TCP port 8080 (or your chosen port) on your router to your machine
+2. Share your public IP and port with friends
+
+### VPN (Tailscale, ZeroTier, Hamachi)
+
+Treated as LAN. No extra configuration needed — just use the VPN-assigned IP.
 
 ## Environment Variables
 
@@ -90,18 +122,21 @@ Create a `.env` file in the project root (optional — defaults work out of the 
 
 ## Makefile Targets
 
-| Target           | Description                                          |
-|------------------|------------------------------------------------------|
-| `dev-backend`    | Run backend with `go run`                            |
-| `dev-frontend`   | Run frontend Vite dev server                         |
-| `test`           | Run all Go tests                                     |
-| `lint`           | Run `go vet`                                         |
-| `build-frontend` | Build frontend production bundle                     |
-| `embed-frontend` | Build frontend and copy into embed dir               |
-| `build-all`      | Full build for all platforms (frontend + Go binaries) |
-| `build-mac`      | Full build for macOS arm64 (frontend + Go binary)    |
-| `build-linux`    | Full build for Linux amd64 (frontend + Go binary)    |
-| `build-windows`  | Full build for Windows amd64 (frontend + Go binary)  |
+| Target              | Description                                              |
+|---------------------|----------------------------------------------------------|
+| `wails-dev`         | Development mode with Wails (hot-reload + native window) |
+| `wails-build`       | Build desktop app for current platform                   |
+| `wails-build-mac`   | Build desktop app for macOS arm64                        |
+| `wails-build-windows` | Build desktop app for Windows amd64                    |
+| `wails-build-linux` | Build desktop app for Linux amd64                        |
+| `dev-backend`       | Run headless backend with `go run`                       |
+| `dev-frontend`      | Run frontend Vite dev server                             |
+| `test`              | Run all Go tests                                         |
+| `lint`              | Run `go vet`                                             |
+| `build-all`         | Headless build for all platforms                          |
+| `build-mac`         | Headless build for macOS arm64                            |
+| `build-linux`       | Headless build for Linux amd64                            |
+| `build-windows`     | Headless build for Windows amd64                          |
 
 ## Running Tests
 
@@ -114,38 +149,43 @@ go test ./...
 ## Project Structure
 
 ```
-cmd/server/               Entry point
+main.go                       Wails entry point (desktop app)
+app.go                        Wails bindings (StartServer, GetConnectionInfo)
+wails.json                    Wails configuration
+cmd/server/                   Headless server entry point
 internal/
-  domain/entity/           Domain models (room, player, round, pot, blinds)
-  domain/event/            Domain events
-  application/             Use cases (room, game, action, tips, blind timer)
-    dto/                   Request/response DTOs
-    port/                  Repository, broadcaster, and network interfaces
+  server/                     Server lifecycle (Start/Stop)
+  domain/entity/              Domain models (room, player, round, pot, blinds)
+  domain/event/               Domain events
+  application/                Use cases (room, game, action, tips, blind timer)
+    dto/                      Request/response DTOs
+    port/                     Repository, broadcaster, and network interfaces
   adapter/
-    handler/               HTTP/WS handlers and routes (game + tips groups)
-    repository/            SQLite repository implementation
-    ws/                    WebSocket hub, client, messages
-  infrastructure/          Config, auth (JWT), database (SQLite)
-  frontend/                Embedded frontend build (go:embed)
-pkg/                       Shared utilities (env loader, ID gen, validator)
+    handler/                  HTTP/WS handlers and routes
+    repository/               SQLite repository implementation
+    ws/                       WebSocket hub, client, messages
+    network/                  IP detection, UPnP port mapping
+  infrastructure/             Config, auth (JWT), database (SQLite)
+  frontend/                   Embedded frontend build (go:embed)
+pkg/                          Shared utilities (env loader, ID gen, validator)
 
 frontend/
   src/
     pages/
-      MainMenuPage         Mode selection (Tips vs Game)
-      tips/                TipsHome, TipsLobby, TipsTable
-      game/                GameHome, GameLobby, GameTable
+      MainMenuPage            Mode selection (Tips vs Game)
+      tips/                   TipsHome, TipsLobby, TipsTable
+      game/                   GameHome, GameLobby, GameTable
     components/
-      shared/              ChipTransfer (tips mode)
-      lobby/               SeatPicker, PlayerList, GameSettings
-      table/               PokerTable, ActionBar, BlindTimer, PlayerSeat
-      host/                HostControls, SettlementModal
-      room/                RebuyModal
-    store/                 Zustand stores (appStore, roomStore, gameStore)
-    services/              API clients (gameApi, tipsApi), WebSocket client
-    hooks/                 Custom React hooks
-    types/                 TypeScript type definitions
-    utils/                 Helpers (constants, formatting, token)
+      shared/                 ConnectionInfo
+      lobby/                  SeatPicker, PlayerList, GameSettings
+      table/                  PokerTable, ActionBar, BlindTimer, PlayerSeat
+      host/                   HostControls, SettlementModal
+      room/                   RebuyModal
+    store/                    Zustand stores (appStore, roomStore, gameStore)
+    services/                 API client, WebSocket client, Wails bindings
+    hooks/                    Custom React hooks
+    types/                    TypeScript type definitions
+    utils/                    Helpers (constants, formatting, token)
 ```
 
 ## API Overview
@@ -173,8 +213,10 @@ frontend/
 | POST   | `/api/v1/tips/rooms/:roomId/blinds/advance`   | Bearer   | Advance blind (host)    |
 | POST   | `/api/v1/tips/rooms/:roomId/pause`            | Bearer   | Pause/resume (host)     |
 
-### WebSocket (shared)
+### Shared
 
-| Endpoint            | Description              |
-|---------------------|--------------------------|
-| `GET /ws?token=jwt` | Real-time state updates  |
+| Method | Endpoint                    | Auth     | Description                  |
+|--------|-----------------------------|----------|------------------------------|
+| GET    | `/api/v1/connection-info`   | Public   | Get server IPs, port, UPnP   |
+| GET    | `/ws?token=jwt`             | Token    | Real-time state updates      |
+| GET    | `/health`                   | Public   | Health check                 |

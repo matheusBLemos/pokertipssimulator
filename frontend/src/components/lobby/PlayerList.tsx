@@ -1,5 +1,5 @@
 import type { Player } from '../../types';
-import { api } from '../../services/api';
+import { getApiForMode } from '../../services/api';
 import { useRoomStore } from '../../store/roomStore';
 import { formatChips } from '../../utils/formatChips';
 import toast from 'react-hot-toast';
@@ -21,9 +21,11 @@ export default function PlayerList({
 }: PlayerListProps) {
   const setRoom = useRoomStore((s) => s.setRoom);
 
+  const room = useRoomStore((s) => s.room);
+
   const handleKick = async (playerId: string) => {
     try {
-      const updated = await api.kickPlayer(roomId, playerId);
+      const updated = await getApiForMode(room?.mode).kickPlayer(roomId, playerId);
       setRoom(updated);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to kick player');
