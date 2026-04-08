@@ -10,12 +10,11 @@ import (
 )
 
 type GameUseCase struct {
-	repo        port.RoomRepository
-	broadcaster port.WSBroadcaster
+	repo port.RoomRepository
 }
 
-func NewGameUseCase(repo port.RoomRepository, broadcaster port.WSBroadcaster) *GameUseCase {
-	return &GameUseCase{repo: repo, broadcaster: broadcaster}
+func NewGameUseCase(repo port.RoomRepository) *GameUseCase {
+	return &GameUseCase{repo: repo}
 }
 
 func (uc *GameUseCase) StartRound(ctx context.Context, roomID, playerID string) (*entity.Room, error) {
@@ -48,6 +47,7 @@ func (uc *GameUseCase) StartRound(ctx context.Context, roomID, playerID string) 
 	})
 
 	dealerSeat := uc.nextDealer(room, activePlayers)
+
 	blindLevel := room.Config.BlindStructure.Levels[room.Config.BlindStructure.CurrentLevel]
 
 	var playerStates []entity.PlayerState
@@ -69,7 +69,7 @@ func (uc *GameUseCase) StartRound(ctx context.Context, roomID, playerID string) 
 	}
 
 	uc.postBlinds(room, round, activePlayers)
-	uc.setFirstToAct(round, activePlayers)
+	uc.setFirstToAct(room, round, activePlayers)
 
 	room.Round = round
 
@@ -94,12 +94,12 @@ func (uc *GameUseCase) AdvanceStreet(ctx context.Context, roomID, playerID strin
 	}
 
 	round := room.Round
-	nextStreet := nextStreet(round.Street)
+	nextStreet := uc.getNextStreet(round.Street)
 	if nextStreet == "" {
 		return nil, entity.ErrInvalidStreet
 	}
 
-	collectBets(round)
+	uc.collectBets(round)
 
 	round.Street = nextStreet
 	round.CurrentBet = 0
@@ -118,7 +118,7 @@ func (uc *GameUseCase) AdvanceStreet(ctx context.Context, roomID, playerID strin
 		sort.Slice(activePlayers, func(i, j int) bool {
 			return activePlayers[i].Seat < activePlayers[j].Seat
 		})
-		setFirstToActPostflop(round, activePlayers)
+		uc.setFirstToActPostflop(room, round, activePlayers)
 	}
 
 	if err := uc.repo.Update(ctx, room); err != nil {
@@ -141,9 +141,9 @@ func (uc *GameUseCase) SettleRound(ctx context.Context, roomID, playerID string,
 		return nil, entity.ErrGameNotStarted
 	}
 
-	collectBets(room.Round)
+	uc.collectBets(room.Round)
 
-	pots := CalculatePots(room.Round)
+	pots := uc.CalculatePots(room.Round)
 	room.Round.Pots = pots
 
 	for _, w := range req.Winners {
@@ -151,9 +151,6 @@ func (uc *GameUseCase) SettleRound(ctx context.Context, roomID, playerID string,
 			continue
 		}
 		pot := pots[w.PotIndex]
-		if len(w.PlayerIDs) == 0 {
-			continue
-		}
 		share := pot.Amount / len(w.PlayerIDs)
 		remainder := pot.Amount % len(w.PlayerIDs)
 
@@ -329,7 +326,7 @@ func (uc *GameUseCase) postBlinds(room *entity.Room, round *entity.Round, active
 	round.MinRaise = bbAmount
 }
 
-func (uc *GameUseCase) setFirstToAct(round *entity.Round, activePlayers []entity.Player) {
+func (uc *GameUseCase) setFirstToAct(room *entity.Room, round *entity.Round, activePlayers []entity.Player) {
 	dealerIdx := -1
 	for i, p := range activePlayers {
 		if p.Seat == round.DealerSeat {
@@ -347,7 +344,7 @@ func (uc *GameUseCase) setFirstToAct(round *entity.Round, activePlayers []entity
 
 	for i := 0; i < len(activePlayers); i++ {
 		idx := (firstIdx + i) % len(activePlayers)
-		ps := findPlayerState(round, activePlayers[idx].ID)
+		ps := FindPlayerState(round, activePlayers[idx].ID)
 		if ps != nil && !ps.AllIn && !ps.Folded {
 			round.CurrentTurn = activePlayers[idx].ID
 			return
@@ -355,7 +352,7 @@ func (uc *GameUseCase) setFirstToAct(round *entity.Round, activePlayers []entity
 	}
 }
 
-func setFirstToActPostflop(round *entity.Round, activePlayers []entity.Player) {
+func (uc *GameUseCase) setFirstToActPostflop(room *entity.Room, round *entity.Round, activePlayers []entity.Player) {
 	dealerIdx := -1
 	for i, p := range activePlayers {
 		if p.Seat == round.DealerSeat {
@@ -366,7 +363,7 @@ func setFirstToActPostflop(round *entity.Round, activePlayers []entity.Player) {
 
 	for i := 1; i <= len(activePlayers); i++ {
 		idx := (dealerIdx + i) % len(activePlayers)
-		ps := findPlayerState(round, activePlayers[idx].ID)
+		ps := FindPlayerState(round, activePlayers[idx].ID)
 		if ps != nil && !ps.AllIn && !ps.Folded {
 			round.CurrentTurn = activePlayers[idx].ID
 			return
@@ -374,7 +371,7 @@ func setFirstToActPostflop(round *entity.Round, activePlayers []entity.Player) {
 	}
 }
 
-func nextStreet(current entity.Street) entity.Street {
+func (uc *GameUseCase) getNextStreet(current entity.Street) entity.Street {
 	switch current {
 	case entity.StreetPreflop:
 		return entity.StreetFlop
@@ -389,13 +386,13 @@ func nextStreet(current entity.Street) entity.Street {
 	}
 }
 
-func collectBets(round *entity.Round) {
+func (uc *GameUseCase) collectBets(round *entity.Round) {
 	for i := range round.PlayerStates {
 		round.PlayerStates[i].Bet = 0
 	}
 }
 
-func CalculatePots(round *entity.Round) []entity.Pot {
+func (uc *GameUseCase) CalculatePots(round *entity.Round) []entity.Pot {
 	type playerBet struct {
 		id       string
 		totalBet int
@@ -418,7 +415,7 @@ func CalculatePots(round *entity.Round) []entity.Pot {
 	var pots []entity.Pot
 	prevLevel := 0
 
-	for _, b := range bets {
+	for i, b := range bets {
 		if b.totalBet <= prevLevel {
 			continue
 		}
@@ -461,6 +458,7 @@ func CalculatePots(round *entity.Round) []entity.Pot {
 		}
 
 		prevLevel = level
+		_ = i
 	}
 
 	if len(pots) == 0 {
@@ -470,7 +468,7 @@ func CalculatePots(round *entity.Round) []entity.Pot {
 	return pots
 }
 
-func findPlayerState(round *entity.Round, playerID string) *entity.PlayerState {
+func FindPlayerState(round *entity.Round, playerID string) *entity.PlayerState {
 	for i := range round.PlayerStates {
 		if round.PlayerStates[i].PlayerID == playerID {
 			return &round.PlayerStates[i]

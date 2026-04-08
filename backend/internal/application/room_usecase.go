@@ -12,11 +12,9 @@ import (
 )
 
 type RoomUseCase struct {
-	repo repository
+	repo port.RoomRepository
 	jwt  *auth.JWTService
 }
-
-type repository = port.RoomRepository
 
 func NewRoomUseCase(repo port.RoomRepository, jwt *auth.JWTService) *RoomUseCase {
 	return &RoomUseCase{repo: repo, jwt: jwt}

@@ -3,15 +3,15 @@ package handler
 import (
 	"github.com/gofiber/fiber/v2"
 
-	"pokertipssimulator/internal/dto"
-	"pokertipssimulator/internal/usecase"
+	"pokertipssimulator/internal/application"
+	"pokertipssimulator/internal/application/dto"
 )
 
 type RoomHandler struct {
-	uc *usecase.RoomUseCase
+	uc *application.RoomUseCase
 }
 
-func NewRoomHandler(uc *usecase.RoomUseCase) *RoomHandler {
+func NewRoomHandler(uc *application.RoomUseCase) *RoomHandler {
 	return &RoomHandler{uc: uc}
 }
 

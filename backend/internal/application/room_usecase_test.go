@@ -2,23 +2,27 @@ package application
 
 import (
 	"context"
+	"strings"
 	"testing"
 
+	"pokertipssimulator/internal/adapter/repository"
 	"pokertipssimulator/internal/application/dto"
-	"pokertipssimulator/internal/application/mock"
+	"pokertipssimulator/internal/application/port"
 	"pokertipssimulator/internal/domain/entity"
 	"pokertipssimulator/internal/infrastructure/auth"
 )
 
-func newRoomTestDeps() (*mock.RoomRepository, *auth.JWTService, *RoomUseCase) {
-	repo := mock.NewRoomRepository()
+func newRoomTestDeps(t *testing.T) (port.RoomRepository, *auth.JWTService, *RoomUseCase) {
+	t.Helper()
+	db := repository.NewTestDB(t)
+	repo := repository.NewSQLiteRoomRepository(db)
 	jwt := auth.NewJWTService("test-secret")
 	uc := NewRoomUseCase(repo, jwt)
 	return repo, jwt, uc
 }
 
 func TestCreateRoom_Defaults(t *testing.T) {
-	_, _, uc := newRoomTestDeps()
+	_, _, uc := newRoomTestDeps(t)
 	ctx := context.Background()
 
 	resp, err := uc.CreateRoom(ctx, dto.CreateRoomRequest{})
@@ -41,7 +45,7 @@ func TestCreateRoom_Defaults(t *testing.T) {
 }
 
 func TestCreateRoom_CustomValues(t *testing.T) {
-	repo, _, uc := newRoomTestDeps()
+	repo, _, uc := newRoomTestDeps(t)
 	ctx := context.Background()
 
 	resp, err := uc.CreateRoom(ctx, dto.CreateRoomRequest{
@@ -77,7 +81,7 @@ func TestCreateRoom_CustomValues(t *testing.T) {
 }
 
 func TestCreateRoom_HostIsFirstPlayer(t *testing.T) {
-	repo, _, uc := newRoomTestDeps()
+	repo, _, uc := newRoomTestDeps(t)
 	ctx := context.Background()
 
 	resp, err := uc.CreateRoom(ctx, dto.CreateRoomRequest{HostName: "Alice"})
@@ -98,7 +102,7 @@ func TestCreateRoom_HostIsFirstPlayer(t *testing.T) {
 }
 
 func TestCreateRoom_DefaultChipSet(t *testing.T) {
-	repo, _, uc := newRoomTestDeps()
+	repo, _, uc := newRoomTestDeps(t)
 	ctx := context.Background()
 
 	resp, _ := uc.CreateRoom(ctx, dto.CreateRoomRequest{})
@@ -110,7 +114,7 @@ func TestCreateRoom_DefaultChipSet(t *testing.T) {
 }
 
 func TestCreateRoom_DefaultBlindStructure(t *testing.T) {
-	repo, _, uc := newRoomTestDeps()
+	repo, _, uc := newRoomTestDeps(t)
 	ctx := context.Background()
 
 	resp, _ := uc.CreateRoom(ctx, dto.CreateRoomRequest{})
@@ -129,7 +133,7 @@ func TestCreateRoom_DefaultBlindStructure(t *testing.T) {
 }
 
 func TestJoinRoom_Success(t *testing.T) {
-	repo, _, uc := newRoomTestDeps()
+	repo, _, uc := newRoomTestDeps(t)
 	ctx := context.Background()
 
 	createResp, _ := uc.CreateRoom(ctx, dto.CreateRoomRequest{HostName: "Host"})
@@ -162,7 +166,7 @@ func TestJoinRoom_Success(t *testing.T) {
 }
 
 func TestJoinRoom_InvalidCode(t *testing.T) {
-	_, _, uc := newRoomTestDeps()
+	_, _, uc := newRoomTestDeps(t)
 	ctx := context.Background()
 
 	tests := []struct {
@@ -186,7 +190,7 @@ func TestJoinRoom_InvalidCode(t *testing.T) {
 }
 
 func TestJoinRoom_RoomFull(t *testing.T) {
-	repo, _, uc := newRoomTestDeps()
+	repo, _, uc := newRoomTestDeps(t)
 	ctx := context.Background()
 
 	createResp, _ := uc.CreateRoom(ctx, dto.CreateRoomRequest{
@@ -208,7 +212,7 @@ func TestJoinRoom_RoomFull(t *testing.T) {
 }
 
 func TestJoinRoom_NonexistentCode(t *testing.T) {
-	_, _, uc := newRoomTestDeps()
+	_, _, uc := newRoomTestDeps(t)
 	ctx := context.Background()
 
 	_, err := uc.JoinRoom(ctx, dto.JoinRoomRequest{Code: "ZZZZZZ", PlayerName: "Guest"})
@@ -218,7 +222,7 @@ func TestJoinRoom_NonexistentCode(t *testing.T) {
 }
 
 func TestJoinRoom_PlayerGetsStartingStack(t *testing.T) {
-	repo, _, uc := newRoomTestDeps()
+	repo, _, uc := newRoomTestDeps(t)
 	ctx := context.Background()
 
 	createResp, _ := uc.CreateRoom(ctx, dto.CreateRoomRequest{
@@ -236,7 +240,7 @@ func TestJoinRoom_PlayerGetsStartingStack(t *testing.T) {
 }
 
 func TestGetRoom(t *testing.T) {
-	_, _, uc := newRoomTestDeps()
+	_, _, uc := newRoomTestDeps(t)
 	ctx := context.Background()
 
 	createResp, _ := uc.CreateRoom(ctx, dto.CreateRoomRequest{HostName: "Host"})
@@ -251,7 +255,7 @@ func TestGetRoom(t *testing.T) {
 }
 
 func TestGetRoom_NotFound(t *testing.T) {
-	_, _, uc := newRoomTestDeps()
+	_, _, uc := newRoomTestDeps(t)
 	ctx := context.Background()
 
 	_, err := uc.GetRoom(ctx, "nonexistent")
@@ -261,7 +265,7 @@ func TestGetRoom_NotFound(t *testing.T) {
 }
 
 func TestUpdateConfig_HostOnly(t *testing.T) {
-	repo, _, uc := newRoomTestDeps()
+	repo, _, uc := newRoomTestDeps(t)
 	ctx := context.Background()
 
 	createResp, _ := uc.CreateRoom(ctx, dto.CreateRoomRequest{HostName: "Host"})
@@ -276,7 +280,7 @@ func TestUpdateConfig_HostOnly(t *testing.T) {
 }
 
 func TestUpdateConfig_OnlyWhenWaiting(t *testing.T) {
-	repo, _, uc := newRoomTestDeps()
+	repo, _, uc := newRoomTestDeps(t)
 	ctx := context.Background()
 
 	createResp, _ := uc.CreateRoom(ctx, dto.CreateRoomRequest{HostName: "Host"})
@@ -293,7 +297,7 @@ func TestUpdateConfig_OnlyWhenWaiting(t *testing.T) {
 }
 
 func TestUpdateConfig_Success(t *testing.T) {
-	repo, _, uc := newRoomTestDeps()
+	repo, _, uc := newRoomTestDeps(t)
 	ctx := context.Background()
 
 	createResp, _ := uc.CreateRoom(ctx, dto.CreateRoomRequest{HostName: "Host"})
@@ -320,7 +324,7 @@ func TestUpdateConfig_Success(t *testing.T) {
 }
 
 func TestUpdateConfig_BlindStructure(t *testing.T) {
-	repo, _, uc := newRoomTestDeps()
+	repo, _, uc := newRoomTestDeps(t)
 	ctx := context.Background()
 
 	createResp, _ := uc.CreateRoom(ctx, dto.CreateRoomRequest{HostName: "Host"})
@@ -346,7 +350,7 @@ func TestUpdateConfig_BlindStructure(t *testing.T) {
 }
 
 func TestPickSeat_Success(t *testing.T) {
-	repo, _, uc := newRoomTestDeps()
+	repo, _, uc := newRoomTestDeps(t)
 	ctx := context.Background()
 
 	createResp, _ := uc.CreateRoom(ctx, dto.CreateRoomRequest{HostName: "Host"})
@@ -364,7 +368,7 @@ func TestPickSeat_Success(t *testing.T) {
 }
 
 func TestPickSeat_InvalidRange(t *testing.T) {
-	repo, _, uc := newRoomTestDeps()
+	repo, _, uc := newRoomTestDeps(t)
 	ctx := context.Background()
 
 	createResp, _ := uc.CreateRoom(ctx, dto.CreateRoomRequest{HostName: "Host"})
@@ -382,7 +386,7 @@ func TestPickSeat_InvalidRange(t *testing.T) {
 }
 
 func TestPickSeat_AlreadyTaken(t *testing.T) {
-	repo, _, uc := newRoomTestDeps()
+	repo, _, uc := newRoomTestDeps(t)
 	ctx := context.Background()
 
 	createResp, _ := uc.CreateRoom(ctx, dto.CreateRoomRequest{HostName: "Host"})
@@ -398,7 +402,7 @@ func TestPickSeat_AlreadyTaken(t *testing.T) {
 }
 
 func TestPickSeat_PlayerCanChangeSeat(t *testing.T) {
-	repo, _, uc := newRoomTestDeps()
+	repo, _, uc := newRoomTestDeps(t)
 	ctx := context.Background()
 
 	createResp, _ := uc.CreateRoom(ctx, dto.CreateRoomRequest{HostName: "Host"})
@@ -417,7 +421,7 @@ func TestPickSeat_PlayerCanChangeSeat(t *testing.T) {
 }
 
 func TestPickSeat_PlayerNotFound(t *testing.T) {
-	repo, _, uc := newRoomTestDeps()
+	repo, _, uc := newRoomTestDeps(t)
 	ctx := context.Background()
 
 	createResp, _ := uc.CreateRoom(ctx, dto.CreateRoomRequest{HostName: "Host"})
@@ -430,7 +434,7 @@ func TestPickSeat_PlayerNotFound(t *testing.T) {
 }
 
 func TestValidateToken(t *testing.T) {
-	_, _, uc := newRoomTestDeps()
+	_, _, uc := newRoomTestDeps(t)
 	ctx := context.Background()
 
 	createResp, _ := uc.CreateRoom(ctx, dto.CreateRoomRequest{HostName: "Host"})
@@ -451,7 +455,7 @@ func TestValidateToken(t *testing.T) {
 }
 
 func TestValidateToken_JoinedPlayerNotHost(t *testing.T) {
-	_, _, uc := newRoomTestDeps()
+	_, _, uc := newRoomTestDeps(t)
 	ctx := context.Background()
 
 	createResp, _ := uc.CreateRoom(ctx, dto.CreateRoomRequest{HostName: "Host"})
@@ -467,10 +471,127 @@ func TestValidateToken_JoinedPlayerNotHost(t *testing.T) {
 }
 
 func TestValidateToken_Invalid(t *testing.T) {
-	_, _, uc := newRoomTestDeps()
+	_, _, uc := newRoomTestDeps(t)
 
 	_, _, _, err := uc.ValidateToken("invalid-token")
 	if err == nil {
 		t.Error("expected error for invalid token")
+	}
+}
+
+func TestJoinRoom_LowercaseCodeNormalized(t *testing.T) {
+	_, _, uc := newRoomTestDeps(t)
+	ctx := context.Background()
+
+	createResp, _ := uc.CreateRoom(ctx, dto.CreateRoomRequest{HostName: "Host"})
+
+	lowerCode := strings.ToLower(createResp.Code)
+	joinResp, err := uc.JoinRoom(ctx, dto.JoinRoomRequest{
+		Code:       lowerCode,
+		PlayerName: "Guest",
+	})
+	if err != nil {
+		t.Fatalf("expected lowercase code to work, got: %v", err)
+	}
+	if joinResp.RoomID != createResp.RoomID {
+		t.Error("room IDs should match when joining with lowercase code")
+	}
+}
+
+func TestJoinRoom_WhitespaceCodeTrimmed(t *testing.T) {
+	_, _, uc := newRoomTestDeps(t)
+	ctx := context.Background()
+
+	createResp, _ := uc.CreateRoom(ctx, dto.CreateRoomRequest{HostName: "Host"})
+
+	joinResp, err := uc.JoinRoom(ctx, dto.JoinRoomRequest{
+		Code:       "  " + createResp.Code + "  ",
+		PlayerName: "Guest",
+	})
+	if err != nil {
+		t.Fatalf("expected whitespace-padded code to work, got: %v", err)
+	}
+	if joinResp.RoomID != createResp.RoomID {
+		t.Error("room IDs should match when joining with whitespace-padded code")
+	}
+}
+
+func TestUpdateConfig_PartialUpdate_OnlyGameMode(t *testing.T) {
+	repo, _, uc := newRoomTestDeps(t)
+	ctx := context.Background()
+
+	createResp, _ := uc.CreateRoom(ctx, dto.CreateRoomRequest{
+		HostName:      "Host",
+		StartingStack: 2000,
+		MaxPlayers:    8,
+	})
+	room, _ := repo.FindByID(ctx, createResp.RoomID)
+
+	updated, err := uc.UpdateConfig(ctx, room.ID, room.HostPlayerID, dto.UpdateConfigRequest{
+		GameMode: "tournament",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if updated.Config.GameMode != entity.GameModeTournament {
+		t.Errorf("expected tournament, got %s", updated.Config.GameMode)
+	}
+	if updated.Config.StartingStack != 2000 {
+		t.Errorf("starting stack should be unchanged at 2000, got %d", updated.Config.StartingStack)
+	}
+	if updated.Config.MaxPlayers != 8 {
+		t.Errorf("max players should be unchanged at 8, got %d", updated.Config.MaxPlayers)
+	}
+}
+
+func TestCreateRoom_TokenIsHostToken(t *testing.T) {
+	_, _, uc := newRoomTestDeps(t)
+	ctx := context.Background()
+
+	resp, _ := uc.CreateRoom(ctx, dto.CreateRoomRequest{HostName: "Host"})
+
+	roomID, _, isHost, err := uc.ValidateToken(resp.Token)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !isHost {
+		t.Error("create room token should be host token")
+	}
+	if roomID != resp.RoomID {
+		t.Error("token room ID should match created room ID")
+	}
+}
+
+func TestJoinRoom_TokenIsNonHostToken(t *testing.T) {
+	_, _, uc := newRoomTestDeps(t)
+	ctx := context.Background()
+
+	createResp, _ := uc.CreateRoom(ctx, dto.CreateRoomRequest{HostName: "Host"})
+	joinResp, _ := uc.JoinRoom(ctx, dto.JoinRoomRequest{Code: createResp.Code, PlayerName: "Guest"})
+
+	_, _, isHost, err := uc.ValidateToken(joinResp.Token)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if isHost {
+		t.Error("join room token should NOT be host token")
+	}
+}
+
+func TestPickSeat_SamePlayerCanReSitSameSeat(t *testing.T) {
+	repo, _, uc := newRoomTestDeps(t)
+	ctx := context.Background()
+
+	createResp, _ := uc.CreateRoom(ctx, dto.CreateRoomRequest{HostName: "Host"})
+	room, _ := repo.FindByID(ctx, createResp.RoomID)
+
+	_, _ = uc.PickSeat(ctx, room.ID, room.HostPlayerID, 3)
+	updated, err := uc.PickSeat(ctx, room.ID, room.HostPlayerID, 3)
+	if err != nil {
+		t.Fatalf("same player re-picking same seat should succeed, got: %v", err)
+	}
+	if updated.FindPlayer(room.HostPlayerID).Seat != 3 {
+		t.Error("seat should still be 3")
 	}
 }

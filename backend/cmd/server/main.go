@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"log"
@@ -19,56 +18,33 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 
-	"pokertipssimulator/config"
+	"pokertipssimulator/internal/adapter/handler"
+	"pokertipssimulator/internal/adapter/repository"
+	"pokertipssimulator/internal/adapter/ws"
+	"pokertipssimulator/internal/application"
 	"pokertipssimulator/internal/frontend"
-	"pokertipssimulator/internal/handler"
-	"pokertipssimulator/internal/repository"
-	"pokertipssimulator/internal/routes"
-	"pokertipssimulator/internal/usecase"
-	"pokertipssimulator/internal/ws"
+	"pokertipssimulator/internal/infrastructure/auth"
+	"pokertipssimulator/internal/infrastructure/config"
+	"pokertipssimulator/internal/infrastructure/database"
 	"pokertipssimulator/pkg/envloader"
-	"pokertipssimulator/pkg/mongodb"
-	"pokertipssimulator/pkg/sqlite"
 )
 
 func main() {
 	envloader.Load(".env")
 	cfg := config.Load()
 
-	var roomRepo repository.RoomRepository
-
-	if cfg.MongoURI != "" {
-		// MongoDB mode (dev with Docker)
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-
-		db, err := mongodb.Connect(ctx, cfg.MongoURI, cfg.MongoDB)
-		if err != nil {
-			log.Fatalf("failed to connect to MongoDB: %v", err)
-		}
-		defer func() {
-			if err := db.Client().Disconnect(context.Background()); err != nil {
-				log.Printf("failed to disconnect from MongoDB: %v", err)
-			}
-		}()
-
-		roomRepo = repository.NewRoomRepository(db)
-		log.Println("Using MongoDB storage")
-	} else {
-		// SQLite mode (local build)
-		db, err := sqlite.Connect(cfg.DBPath)
-		if err != nil {
-			log.Fatalf("failed to open SQLite: %v", err)
-		}
-		defer db.Close()
-
-		roomRepo = repository.NewSQLiteRoomRepository(db)
-		log.Printf("Using SQLite storage (%s)", cfg.DBPath)
+	db, err := database.OpenSQLite(cfg.DBPath)
+	if err != nil {
+		log.Fatalf("failed to open SQLite: %v", err)
 	}
+	defer db.Close()
 
-	roomUC := usecase.NewRoomUseCase(roomRepo, cfg.JWTSecret)
-	gameUC := usecase.NewGameUseCase(roomRepo)
-	actionUC := usecase.NewActionUseCase(roomRepo)
+	roomRepo := repository.NewSQLiteRoomRepository(db)
+	jwtService := auth.NewJWTService(cfg.JWTSecret)
+
+	roomUC := application.NewRoomUseCase(roomRepo, jwtService)
+	gameUC := application.NewGameUseCase(roomRepo)
+	actionUC := application.NewActionUseCase(roomRepo)
 
 	hub := ws.NewHub()
 	go hub.Run()
@@ -89,7 +65,7 @@ func main() {
 		AllowHeaders: "Origin, Content-Type, Accept, Authorization",
 	}))
 
-	routes.Setup(app, roomHandler, gameHandler, actionHandler, wsHandler, cfg.JWTSecret)
+	handler.SetupRoutes(app, roomHandler, gameHandler, actionHandler, wsHandler, cfg.JWTSecret)
 
 	// Serve embedded frontend (SPA) after API routes
 	frontend.RegisterSPA(app)

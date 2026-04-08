@@ -7,18 +7,18 @@ import (
 	"fmt"
 	"time"
 
-	"pokertipssimulator/internal/entity"
+	"pokertipssimulator/internal/domain/entity"
 )
 
-type sqliteRoomRepository struct {
+type SQLiteRoomRepository struct {
 	db *sql.DB
 }
 
-func NewSQLiteRoomRepository(db *sql.DB) RoomRepository {
-	return &sqliteRoomRepository{db: db}
+func NewSQLiteRoomRepository(db *sql.DB) *SQLiteRoomRepository {
+	return &SQLiteRoomRepository{db: db}
 }
 
-func (r *sqliteRoomRepository) Create(ctx context.Context, room *entity.Room) error {
+func (r *SQLiteRoomRepository) Create(ctx context.Context, room *entity.Room) error {
 	now := time.Now()
 	room.CreatedAt = now
 	room.UpdatedAt = now
@@ -35,7 +35,7 @@ func (r *sqliteRoomRepository) Create(ctx context.Context, room *entity.Room) er
 	return err
 }
 
-func (r *sqliteRoomRepository) FindByID(ctx context.Context, id string) (*entity.Room, error) {
+func (r *SQLiteRoomRepository) FindByID(ctx context.Context, id string) (*entity.Room, error) {
 	var data string
 	err := r.db.QueryRowContext(ctx, "SELECT data FROM rooms WHERE id = ?", id).Scan(&data)
 	if err == sql.ErrNoRows {
@@ -52,7 +52,7 @@ func (r *sqliteRoomRepository) FindByID(ctx context.Context, id string) (*entity
 	return &room, nil
 }
 
-func (r *sqliteRoomRepository) FindByCode(ctx context.Context, code string) (*entity.Room, error) {
+func (r *SQLiteRoomRepository) FindByCode(ctx context.Context, code string) (*entity.Room, error) {
 	var data string
 	err := r.db.QueryRowContext(ctx, "SELECT data FROM rooms WHERE code = ?", code).Scan(&data)
 	if err == sql.ErrNoRows {
@@ -69,7 +69,7 @@ func (r *sqliteRoomRepository) FindByCode(ctx context.Context, code string) (*en
 	return &room, nil
 }
 
-func (r *sqliteRoomRepository) Update(ctx context.Context, room *entity.Room) error {
+func (r *SQLiteRoomRepository) Update(ctx context.Context, room *entity.Room) error {
 	room.UpdatedAt = time.Now()
 
 	data, err := json.Marshal(room)
@@ -84,7 +84,7 @@ func (r *sqliteRoomRepository) Update(ctx context.Context, room *entity.Room) er
 	return err
 }
 
-func (r *sqliteRoomRepository) Delete(ctx context.Context, id string) error {
+func (r *SQLiteRoomRepository) Delete(ctx context.Context, id string) error {
 	_, err := r.db.ExecContext(ctx, "DELETE FROM rooms WHERE id = ?", id)
 	return err
 }

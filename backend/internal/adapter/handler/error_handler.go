@@ -5,8 +5,8 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
-	"pokertipssimulator/internal/dto"
-	"pokertipssimulator/internal/entity"
+	"pokertipssimulator/internal/application/dto"
+	"pokertipssimulator/internal/domain/entity"
 )
 
 func ErrorHandler(c *fiber.Ctx, err error) error {

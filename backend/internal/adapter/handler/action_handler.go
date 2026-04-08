@@ -3,18 +3,18 @@ package handler
 import (
 	"github.com/gofiber/fiber/v2"
 
-	"pokertipssimulator/internal/dto"
-	"pokertipssimulator/internal/entity"
-	"pokertipssimulator/internal/usecase"
-	"pokertipssimulator/internal/ws"
+	"pokertipssimulator/internal/adapter/ws"
+	"pokertipssimulator/internal/application"
+	"pokertipssimulator/internal/application/dto"
+	"pokertipssimulator/internal/domain/entity"
 )
 
 type ActionHandler struct {
-	uc  *usecase.ActionUseCase
+	uc  *application.ActionUseCase
 	hub *ws.Hub
 }
 
-func NewActionHandler(uc *usecase.ActionUseCase, hub *ws.Hub) *ActionHandler {
+func NewActionHandler(uc *application.ActionUseCase, hub *ws.Hub) *ActionHandler {
 	return &ActionHandler{uc: uc, hub: hub}
 }
 

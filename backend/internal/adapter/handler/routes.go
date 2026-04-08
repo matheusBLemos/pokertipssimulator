@@ -1,4 +1,4 @@
-package routes
+package handler
 
 import (
 	"strings"
@@ -6,23 +6,18 @@ import (
 	"github.com/gofiber/contrib/websocket"
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v5"
-
-	"pokertipssimulator/internal/handler"
 )
 
-func Setup(app *fiber.App, roomH *handler.RoomHandler, gameH *handler.GameHandler, actionH *handler.ActionHandler, wsH *handler.WSHandler, jwtSecret string) {
-	// Health check
+func SetupRoutes(app *fiber.App, roomH *RoomHandler, gameH *GameHandler, actionH *ActionHandler, wsH *WSHandler, jwtSecret string) {
 	app.Get("/health", func(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{"status": "ok"})
 	})
 
 	api := app.Group("/api/v1")
 
-	// Public routes
 	api.Post("/rooms", roomH.CreateRoom)
 	api.Post("/rooms/join", roomH.JoinRoom)
 
-	// Auth middleware
 	auth := func(c *fiber.Ctx) error {
 		authHeader := c.Get("Authorization")
 		if authHeader == "" {
@@ -45,7 +40,6 @@ func Setup(app *fiber.App, roomH *handler.RoomHandler, gameH *handler.GameHandle
 		return c.Next()
 	}
 
-	// Protected routes
 	rooms := api.Group("/rooms/:roomId", auth)
 	rooms.Get("/", roomH.GetRoom)
 	rooms.Put("/config", roomH.UpdateConfig)
@@ -58,7 +52,6 @@ func Setup(app *fiber.App, roomH *handler.RoomHandler, gameH *handler.GameHandle
 	rooms.Post("/action", actionH.PerformAction)
 	rooms.Delete("/players/:playerId", gameH.KickPlayer)
 
-	// WebSocket
 	app.Use("/ws", wsH.Upgrade)
 	app.Get("/ws", websocket.New(wsH.Handle))
 }

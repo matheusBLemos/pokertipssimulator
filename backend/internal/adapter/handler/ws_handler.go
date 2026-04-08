@@ -7,16 +7,16 @@ import (
 	"github.com/gofiber/contrib/websocket"
 	"github.com/gofiber/fiber/v2"
 
-	"pokertipssimulator/internal/usecase"
-	"pokertipssimulator/internal/ws"
+	"pokertipssimulator/internal/adapter/ws"
+	"pokertipssimulator/internal/application"
 )
 
 type WSHandler struct {
 	hub *ws.Hub
-	uc  *usecase.RoomUseCase
+	uc  *application.RoomUseCase
 }
 
-func NewWSHandler(hub *ws.Hub, uc *usecase.RoomUseCase) *WSHandler {
+func NewWSHandler(hub *ws.Hub, uc *application.RoomUseCase) *WSHandler {
 	return &WSHandler{hub: hub, uc: uc}
 }
 
@@ -53,7 +53,6 @@ func (h *WSHandler) Handle(c *websocket.Conn) {
 
 	h.hub.Register <- client
 
-	// Send current room state on connect
 	room, err := h.uc.GetRoom(context.Background(), roomID)
 	if err == nil {
 		h.hub.SendToPlayer(roomID, playerID, ws.NewMessage(ws.MsgTypeRoomState, room))

@@ -4,12 +4,22 @@ import (
 	"context"
 	"testing"
 
+	"pokertipssimulator/internal/adapter/repository"
 	"pokertipssimulator/internal/application/dto"
-	"pokertipssimulator/internal/application/mock"
+	"pokertipssimulator/internal/application/port"
 	"pokertipssimulator/internal/domain/entity"
 )
 
-func seedRoom(repo *mock.RoomRepository, hostID string, players []entity.Player, opts ...func(*entity.Room)) *entity.Room {
+func newGameTestDeps(t *testing.T) (port.RoomRepository, *GameUseCase) {
+	t.Helper()
+	db := repository.NewTestDB(t)
+	repo := repository.NewSQLiteRoomRepository(db)
+	uc := NewGameUseCase(repo)
+	return repo, uc
+}
+
+func seedRoom(t *testing.T, repo port.RoomRepository, hostID string, players []entity.Player, opts ...func(*entity.Room)) *entity.Room {
+	t.Helper()
 	room := &entity.Room{
 		ID:           "room-1",
 		Code:         "ABC123",
@@ -32,21 +42,30 @@ func seedRoom(repo *mock.RoomRepository, hostID string, players []entity.Player,
 	for _, opt := range opts {
 		opt(room)
 	}
-	repo.Seed(room)
+	ctx := context.Background()
+	if err := repo.Create(ctx, room); err != nil {
+		t.Fatalf("seed room: %v", err)
+	}
 	return room
 }
 
+func reseedRoom(t *testing.T, repo port.RoomRepository, room *entity.Room) {
+	t.Helper()
+	ctx := context.Background()
+	if err := repo.Update(ctx, room); err != nil {
+		t.Fatalf("reseed room: %v", err)
+	}
+}
+
 func TestStartRound_Success(t *testing.T) {
-	repo := mock.NewRoomRepository()
-	bc := mock.NewWSBroadcaster()
-	uc := NewGameUseCase(repo, bc)
+	repo, uc := newGameTestDeps(t)
 	ctx := context.Background()
 
 	players := []entity.Player{
-		{ID: "host", Name: "Host", Seat: 1, Stack: 1000, Status: PlayerStatusActive(entity.PlayerStatusWaiting)},
+		{ID: "host", Name: "Host", Seat: 1, Stack: 1000, Status: entity.PlayerStatusWaiting},
 		{ID: "p2", Name: "P2", Seat: 2, Stack: 1000, Status: entity.PlayerStatusWaiting},
 	}
-	seedRoom(repo, "host", players)
+	seedRoom(t, repo, "host", players)
 
 	room, err := uc.StartRound(ctx, "room-1", "host")
 	if err != nil {
@@ -67,19 +86,15 @@ func TestStartRound_Success(t *testing.T) {
 	}
 }
 
-func PlayerStatusActive(s entity.PlayerStatus) entity.PlayerStatus { return s }
-
 func TestStartRound_NotHost(t *testing.T) {
-	repo := mock.NewRoomRepository()
-	bc := mock.NewWSBroadcaster()
-	uc := NewGameUseCase(repo, bc)
+	repo, uc := newGameTestDeps(t)
 	ctx := context.Background()
 
 	players := []entity.Player{
 		{ID: "host", Seat: 1, Stack: 1000, Status: entity.PlayerStatusWaiting},
 		{ID: "p2", Seat: 2, Stack: 1000, Status: entity.PlayerStatusWaiting},
 	}
-	seedRoom(repo, "host", players)
+	seedRoom(t, repo, "host", players)
 
 	_, err := uc.StartRound(ctx, "room-1", "p2")
 	if err != entity.ErrNotHost {
@@ -88,15 +103,13 @@ func TestStartRound_NotHost(t *testing.T) {
 }
 
 func TestStartRound_NotEnoughPlayers(t *testing.T) {
-	repo := mock.NewRoomRepository()
-	bc := mock.NewWSBroadcaster()
-	uc := NewGameUseCase(repo, bc)
+	repo, uc := newGameTestDeps(t)
 	ctx := context.Background()
 
 	players := []entity.Player{
 		{ID: "host", Seat: 1, Stack: 1000, Status: entity.PlayerStatusWaiting},
 	}
-	seedRoom(repo, "host", players)
+	seedRoom(t, repo, "host", players)
 
 	_, err := uc.StartRound(ctx, "room-1", "host")
 	if err != entity.ErrNotEnoughPlayers {
@@ -105,16 +118,14 @@ func TestStartRound_NotEnoughPlayers(t *testing.T) {
 }
 
 func TestStartRound_UnseatedPlayersExcluded(t *testing.T) {
-	repo := mock.NewRoomRepository()
-	bc := mock.NewWSBroadcaster()
-	uc := NewGameUseCase(repo, bc)
+	repo, uc := newGameTestDeps(t)
 	ctx := context.Background()
 
 	players := []entity.Player{
 		{ID: "host", Seat: 1, Stack: 1000, Status: entity.PlayerStatusWaiting},
 		{ID: "p2", Seat: 0, Stack: 1000, Status: entity.PlayerStatusWaiting},
 	}
-	seedRoom(repo, "host", players)
+	seedRoom(t, repo, "host", players)
 
 	_, err := uc.StartRound(ctx, "room-1", "host")
 	if err != entity.ErrNotEnoughPlayers {
@@ -123,9 +134,7 @@ func TestStartRound_UnseatedPlayersExcluded(t *testing.T) {
 }
 
 func TestStartRound_BlindsPosted(t *testing.T) {
-	repo := mock.NewRoomRepository()
-	bc := mock.NewWSBroadcaster()
-	uc := NewGameUseCase(repo, bc)
+	repo, uc := newGameTestDeps(t)
 	ctx := context.Background()
 
 	players := []entity.Player{
@@ -133,7 +142,7 @@ func TestStartRound_BlindsPosted(t *testing.T) {
 		{ID: "p2", Seat: 2, Stack: 1000, Status: entity.PlayerStatusWaiting},
 		{ID: "p3", Seat: 3, Stack: 1000, Status: entity.PlayerStatusWaiting},
 	}
-	seedRoom(repo, "host", players)
+	seedRoom(t, repo, "host", players)
 
 	room, _ := uc.StartRound(ctx, "room-1", "host")
 
@@ -150,16 +159,14 @@ func TestStartRound_BlindsPosted(t *testing.T) {
 }
 
 func TestStartRound_HeadsUp_DealerIsSB(t *testing.T) {
-	repo := mock.NewRoomRepository()
-	bc := mock.NewWSBroadcaster()
-	uc := NewGameUseCase(repo, bc)
+	repo, uc := newGameTestDeps(t)
 	ctx := context.Background()
 
 	players := []entity.Player{
 		{ID: "host", Seat: 1, Stack: 1000, Status: entity.PlayerStatusWaiting},
 		{ID: "p2", Seat: 2, Stack: 1000, Status: entity.PlayerStatusWaiting},
 	}
-	seedRoom(repo, "host", players)
+	seedRoom(t, repo, "host", players)
 
 	room, _ := uc.StartRound(ctx, "room-1", "host")
 
@@ -183,16 +190,14 @@ func TestStartRound_HeadsUp_DealerIsSB(t *testing.T) {
 }
 
 func TestStartRound_FirstToAct_HeadsUp(t *testing.T) {
-	repo := mock.NewRoomRepository()
-	bc := mock.NewWSBroadcaster()
-	uc := NewGameUseCase(repo, bc)
+	repo, uc := newGameTestDeps(t)
 	ctx := context.Background()
 
 	players := []entity.Player{
 		{ID: "host", Seat: 1, Stack: 1000, Status: entity.PlayerStatusWaiting},
 		{ID: "p2", Seat: 2, Stack: 1000, Status: entity.PlayerStatusWaiting},
 	}
-	seedRoom(repo, "host", players)
+	seedRoom(t, repo, "host", players)
 
 	room, _ := uc.StartRound(ctx, "room-1", "host")
 
@@ -211,9 +216,7 @@ func TestStartRound_FirstToAct_HeadsUp(t *testing.T) {
 }
 
 func TestStartRound_FirstToAct_MultiWay(t *testing.T) {
-	repo := mock.NewRoomRepository()
-	bc := mock.NewWSBroadcaster()
-	uc := NewGameUseCase(repo, bc)
+	repo, uc := newGameTestDeps(t)
 	ctx := context.Background()
 
 	players := []entity.Player{
@@ -222,13 +225,13 @@ func TestStartRound_FirstToAct_MultiWay(t *testing.T) {
 		{ID: "p3", Seat: 3, Stack: 1000, Status: entity.PlayerStatusWaiting},
 		{ID: "p4", Seat: 4, Stack: 1000, Status: entity.PlayerStatusWaiting},
 	}
-	seedRoom(repo, "p1", players)
+	seedRoom(t, repo, "p1", players)
 
 	room, _ := uc.StartRound(ctx, "room-1", "p1")
 
 	dealerSeat := room.Round.DealerSeat
 
-	var seatToID map[int]string = make(map[int]string)
+	seatToID := make(map[int]string)
 	for _, p := range room.Players {
 		seatToID[p.Seat] = p.ID
 	}
@@ -251,9 +254,7 @@ func TestStartRound_FirstToAct_MultiWay(t *testing.T) {
 }
 
 func TestStartRound_EliminatedPlayersExcluded(t *testing.T) {
-	repo := mock.NewRoomRepository()
-	bc := mock.NewWSBroadcaster()
-	uc := NewGameUseCase(repo, bc)
+	repo, uc := newGameTestDeps(t)
 	ctx := context.Background()
 
 	players := []entity.Player{
@@ -261,7 +262,7 @@ func TestStartRound_EliminatedPlayersExcluded(t *testing.T) {
 		{ID: "p2", Seat: 2, Stack: 0, Status: entity.PlayerStatusEliminated},
 		{ID: "p3", Seat: 3, Stack: 1000, Status: entity.PlayerStatusWaiting},
 	}
-	seedRoom(repo, "host", players)
+	seedRoom(t, repo, "host", players)
 
 	room, err := uc.StartRound(ctx, "room-1", "host")
 	if err != nil {
@@ -280,16 +281,14 @@ func TestStartRound_EliminatedPlayersExcluded(t *testing.T) {
 }
 
 func TestAdvanceStreet_Success(t *testing.T) {
-	repo := mock.NewRoomRepository()
-	bc := mock.NewWSBroadcaster()
-	uc := NewGameUseCase(repo, bc)
+	repo, uc := newGameTestDeps(t)
 	ctx := context.Background()
 
 	players := []entity.Player{
 		{ID: "host", Seat: 1, Stack: 990, Status: entity.PlayerStatusActive},
 		{ID: "p2", Seat: 2, Stack: 990, Status: entity.PlayerStatusActive},
 	}
-	room := seedRoom(repo, "host", players)
+	room := seedRoom(t, repo, "host", players)
 	room.Round = &entity.Round{
 		Number:     1,
 		Street:     entity.StreetPreflop,
@@ -300,6 +299,7 @@ func TestAdvanceStreet_Success(t *testing.T) {
 			{PlayerID: "p2", Bet: 10, TotalBet: 10, HasActed: true},
 		},
 	}
+	reseedRoom(t, repo, room)
 
 	updated, err := uc.AdvanceStreet(ctx, "room-1", "host")
 	if err != nil {
@@ -323,9 +323,7 @@ func TestAdvanceStreet_Success(t *testing.T) {
 }
 
 func TestAdvanceStreet_AllStreets(t *testing.T) {
-	repo := mock.NewRoomRepository()
-	bc := mock.NewWSBroadcaster()
-	uc := NewGameUseCase(repo, bc)
+	repo, uc := newGameTestDeps(t)
 	ctx := context.Background()
 
 	players := []entity.Player{
@@ -337,7 +335,11 @@ func TestAdvanceStreet_AllStreets(t *testing.T) {
 	expected := []entity.Street{entity.StreetFlop, entity.StreetTurn, entity.StreetRiver, entity.StreetShowdown}
 
 	for i, street := range streets {
-		room := seedRoom(repo, "host", players)
+		// Delete and re-create room for each sub-test to avoid UNIQUE constraint violations
+		ctx2 := context.Background()
+		_ = repo.Delete(ctx2, "room-1")
+
+		room := seedRoom(t, repo, "host", players)
 		room.Round = &entity.Round{
 			Number:     1,
 			Street:     street,
@@ -348,6 +350,7 @@ func TestAdvanceStreet_AllStreets(t *testing.T) {
 				{PlayerID: "p2", HasActed: true},
 			},
 		}
+		reseedRoom(t, repo, room)
 
 		updated, err := uc.AdvanceStreet(ctx, "room-1", "host")
 		if err != nil {
@@ -360,16 +363,14 @@ func TestAdvanceStreet_AllStreets(t *testing.T) {
 }
 
 func TestAdvanceStreet_ShowdownMarksComplete(t *testing.T) {
-	repo := mock.NewRoomRepository()
-	bc := mock.NewWSBroadcaster()
-	uc := NewGameUseCase(repo, bc)
+	repo, uc := newGameTestDeps(t)
 	ctx := context.Background()
 
 	players := []entity.Player{
 		{ID: "host", Seat: 1, Stack: 990, Status: entity.PlayerStatusActive},
 		{ID: "p2", Seat: 2, Stack: 990, Status: entity.PlayerStatusActive},
 	}
-	room := seedRoom(repo, "host", players)
+	room := seedRoom(t, repo, "host", players)
 	room.Round = &entity.Round{
 		Number:     1,
 		Street:     entity.StreetRiver,
@@ -380,6 +381,7 @@ func TestAdvanceStreet_ShowdownMarksComplete(t *testing.T) {
 			{PlayerID: "p2", HasActed: true},
 		},
 	}
+	reseedRoom(t, repo, room)
 
 	updated, _ := uc.AdvanceStreet(ctx, "room-1", "host")
 	if !updated.Round.IsComplete {
@@ -391,17 +393,16 @@ func TestAdvanceStreet_ShowdownMarksComplete(t *testing.T) {
 }
 
 func TestAdvanceStreet_NotHost(t *testing.T) {
-	repo := mock.NewRoomRepository()
-	bc := mock.NewWSBroadcaster()
-	uc := NewGameUseCase(repo, bc)
+	repo, uc := newGameTestDeps(t)
 	ctx := context.Background()
 
 	players := []entity.Player{
 		{ID: "host", Seat: 1, Stack: 1000, Status: entity.PlayerStatusActive},
 		{ID: "p2", Seat: 2, Stack: 1000, Status: entity.PlayerStatusActive},
 	}
-	room := seedRoom(repo, "host", players)
+	room := seedRoom(t, repo, "host", players)
 	room.Round = &entity.Round{Street: entity.StreetPreflop, BigBlind: 10, PlayerStates: []entity.PlayerState{}}
+	reseedRoom(t, repo, room)
 
 	_, err := uc.AdvanceStreet(ctx, "room-1", "p2")
 	if err != entity.ErrNotHost {
@@ -410,13 +411,11 @@ func TestAdvanceStreet_NotHost(t *testing.T) {
 }
 
 func TestAdvanceStreet_NoRound(t *testing.T) {
-	repo := mock.NewRoomRepository()
-	bc := mock.NewWSBroadcaster()
-	uc := NewGameUseCase(repo, bc)
+	repo, uc := newGameTestDeps(t)
 	ctx := context.Background()
 
 	players := []entity.Player{{ID: "host", Seat: 1, Stack: 1000}}
-	seedRoom(repo, "host", players)
+	seedRoom(t, repo, "host", players)
 
 	_, err := uc.AdvanceStreet(ctx, "room-1", "host")
 	if err != entity.ErrGameNotStarted {
@@ -425,16 +424,15 @@ func TestAdvanceStreet_NoRound(t *testing.T) {
 }
 
 func TestAdvanceStreet_InvalidFromShowdown(t *testing.T) {
-	repo := mock.NewRoomRepository()
-	bc := mock.NewWSBroadcaster()
-	uc := NewGameUseCase(repo, bc)
+	repo, uc := newGameTestDeps(t)
 	ctx := context.Background()
 
 	players := []entity.Player{
 		{ID: "host", Seat: 1, Stack: 1000, Status: entity.PlayerStatusActive},
 	}
-	room := seedRoom(repo, "host", players)
+	room := seedRoom(t, repo, "host", players)
 	room.Round = &entity.Round{Street: entity.StreetShowdown, BigBlind: 10}
+	reseedRoom(t, repo, room)
 
 	_, err := uc.AdvanceStreet(ctx, "room-1", "host")
 	if err != entity.ErrInvalidStreet {
@@ -443,16 +441,14 @@ func TestAdvanceStreet_InvalidFromShowdown(t *testing.T) {
 }
 
 func TestSettleRound_Success(t *testing.T) {
-	repo := mock.NewRoomRepository()
-	bc := mock.NewWSBroadcaster()
-	uc := NewGameUseCase(repo, bc)
+	repo, uc := newGameTestDeps(t)
 	ctx := context.Background()
 
 	players := []entity.Player{
 		{ID: "host", Seat: 1, Stack: 900, Status: entity.PlayerStatusActive},
 		{ID: "p2", Seat: 2, Stack: 900, Status: entity.PlayerStatusActive},
 	}
-	room := seedRoom(repo, "host", players)
+	room := seedRoom(t, repo, "host", players)
 	room.Status = entity.RoomStatusPlaying
 	room.Round = &entity.Round{
 		Number:     1,
@@ -464,6 +460,7 @@ func TestSettleRound_Success(t *testing.T) {
 			{PlayerID: "p2", TotalBet: 100},
 		},
 	}
+	reseedRoom(t, repo, room)
 
 	updated, err := uc.SettleRound(ctx, "room-1", "host", dto.SettleRequest{
 		Winners: []dto.PotWinner{
@@ -488,16 +485,14 @@ func TestSettleRound_Success(t *testing.T) {
 }
 
 func TestSettleRound_SplitPot(t *testing.T) {
-	repo := mock.NewRoomRepository()
-	bc := mock.NewWSBroadcaster()
-	uc := NewGameUseCase(repo, bc)
+	repo, uc := newGameTestDeps(t)
 	ctx := context.Background()
 
 	players := []entity.Player{
 		{ID: "p1", Seat: 1, Stack: 900, Status: entity.PlayerStatusActive},
 		{ID: "p2", Seat: 2, Stack: 900, Status: entity.PlayerStatusActive},
 	}
-	room := seedRoom(repo, "p1", players)
+	room := seedRoom(t, repo, "p1", players)
 	room.Round = &entity.Round{
 		Street:   entity.StreetShowdown,
 		BigBlind: 10,
@@ -506,6 +501,7 @@ func TestSettleRound_SplitPot(t *testing.T) {
 			{PlayerID: "p2", TotalBet: 100},
 		},
 	}
+	reseedRoom(t, repo, room)
 
 	updated, _ := uc.SettleRound(ctx, "room-1", "p1", dto.SettleRequest{
 		Winners: []dto.PotWinner{
@@ -521,9 +517,7 @@ func TestSettleRound_SplitPot(t *testing.T) {
 }
 
 func TestSettleRound_OddChipToFirstWinner(t *testing.T) {
-	repo := mock.NewRoomRepository()
-	bc := mock.NewWSBroadcaster()
-	uc := NewGameUseCase(repo, bc)
+	repo, uc := newGameTestDeps(t)
 	ctx := context.Background()
 
 	players := []entity.Player{
@@ -531,7 +525,7 @@ func TestSettleRound_OddChipToFirstWinner(t *testing.T) {
 		{ID: "p2", Seat: 2, Stack: 949, Status: entity.PlayerStatusActive},
 		{ID: "p3", Seat: 3, Stack: 949, Status: entity.PlayerStatusActive},
 	}
-	room := seedRoom(repo, "p1", players)
+	room := seedRoom(t, repo, "p1", players)
 	room.Round = &entity.Round{
 		Street:   entity.StreetShowdown,
 		BigBlind: 10,
@@ -541,6 +535,7 @@ func TestSettleRound_OddChipToFirstWinner(t *testing.T) {
 			{PlayerID: "p3", TotalBet: 51},
 		},
 	}
+	reseedRoom(t, repo, room)
 
 	updated, _ := uc.SettleRound(ctx, "room-1", "p1", dto.SettleRequest{
 		Winners: []dto.PotWinner{
@@ -563,16 +558,14 @@ func TestSettleRound_OddChipToFirstWinner(t *testing.T) {
 }
 
 func TestSettleRound_TournamentElimination(t *testing.T) {
-	repo := mock.NewRoomRepository()
-	bc := mock.NewWSBroadcaster()
-	uc := NewGameUseCase(repo, bc)
+	repo, uc := newGameTestDeps(t)
 	ctx := context.Background()
 
 	players := []entity.Player{
 		{ID: "p1", Seat: 1, Stack: 900, Status: entity.PlayerStatusActive},
 		{ID: "p2", Seat: 2, Stack: 0, Status: entity.PlayerStatusActive},
 	}
-	room := seedRoom(repo, "p1", players, func(r *entity.Room) {
+	room := seedRoom(t, repo, "p1", players, func(r *entity.Room) {
 		r.Config.GameMode = entity.GameModeTournament
 	})
 	room.Round = &entity.Round{
@@ -583,6 +576,7 @@ func TestSettleRound_TournamentElimination(t *testing.T) {
 			{PlayerID: "p2", TotalBet: 100},
 		},
 	}
+	reseedRoom(t, repo, room)
 
 	updated, _ := uc.SettleRound(ctx, "room-1", "p1", dto.SettleRequest{
 		Winners: []dto.PotWinner{
@@ -597,16 +591,14 @@ func TestSettleRound_TournamentElimination(t *testing.T) {
 }
 
 func TestSettleRound_CashNoElimination(t *testing.T) {
-	repo := mock.NewRoomRepository()
-	bc := mock.NewWSBroadcaster()
-	uc := NewGameUseCase(repo, bc)
+	repo, uc := newGameTestDeps(t)
 	ctx := context.Background()
 
 	players := []entity.Player{
 		{ID: "p1", Seat: 1, Stack: 900, Status: entity.PlayerStatusActive},
 		{ID: "p2", Seat: 2, Stack: 0, Status: entity.PlayerStatusActive},
 	}
-	room := seedRoom(repo, "p1", players)
+	room := seedRoom(t, repo, "p1", players)
 	room.Round = &entity.Round{
 		Street:   entity.StreetShowdown,
 		BigBlind: 10,
@@ -615,6 +607,7 @@ func TestSettleRound_CashNoElimination(t *testing.T) {
 			{PlayerID: "p2", TotalBet: 100},
 		},
 	}
+	reseedRoom(t, repo, room)
 
 	updated, _ := uc.SettleRound(ctx, "room-1", "p1", dto.SettleRequest{
 		Winners: []dto.PotWinner{
@@ -629,20 +622,19 @@ func TestSettleRound_CashNoElimination(t *testing.T) {
 }
 
 func TestSettleRound_NotHost(t *testing.T) {
-	repo := mock.NewRoomRepository()
-	bc := mock.NewWSBroadcaster()
-	uc := NewGameUseCase(repo, bc)
+	repo, uc := newGameTestDeps(t)
 	ctx := context.Background()
 
 	players := []entity.Player{
 		{ID: "host", Seat: 1, Stack: 1000, Status: entity.PlayerStatusActive},
 		{ID: "p2", Seat: 2, Stack: 1000, Status: entity.PlayerStatusActive},
 	}
-	room := seedRoom(repo, "host", players)
+	room := seedRoom(t, repo, "host", players)
 	room.Round = &entity.Round{
 		BigBlind:     10,
 		PlayerStates: []entity.PlayerState{{PlayerID: "host"}, {PlayerID: "p2"}},
 	}
+	reseedRoom(t, repo, room)
 
 	_, err := uc.SettleRound(ctx, "room-1", "p2", dto.SettleRequest{})
 	if err != entity.ErrNotHost {
@@ -651,16 +643,15 @@ func TestSettleRound_NotHost(t *testing.T) {
 }
 
 func TestPauseGame_Toggle(t *testing.T) {
-	repo := mock.NewRoomRepository()
-	bc := mock.NewWSBroadcaster()
-	uc := NewGameUseCase(repo, bc)
+	repo, uc := newGameTestDeps(t)
 	ctx := context.Background()
 
 	players := []entity.Player{
 		{ID: "host", Seat: 1, Stack: 1000, Status: entity.PlayerStatusActive},
 	}
-	room := seedRoom(repo, "host", players)
+	room := seedRoom(t, repo, "host", players)
 	room.Status = entity.RoomStatusPlaying
+	reseedRoom(t, repo, room)
 
 	updated, _ := uc.PauseGame(ctx, "room-1", "host")
 	if updated.Status != entity.RoomStatusPaused {
@@ -674,17 +665,16 @@ func TestPauseGame_Toggle(t *testing.T) {
 }
 
 func TestPauseGame_NotHost(t *testing.T) {
-	repo := mock.NewRoomRepository()
-	bc := mock.NewWSBroadcaster()
-	uc := NewGameUseCase(repo, bc)
+	repo, uc := newGameTestDeps(t)
 	ctx := context.Background()
 
 	players := []entity.Player{
 		{ID: "host", Seat: 1, Stack: 1000},
 		{ID: "p2", Seat: 2, Stack: 1000},
 	}
-	room := seedRoom(repo, "host", players)
+	room := seedRoom(t, repo, "host", players)
 	room.Status = entity.RoomStatusPlaying
+	reseedRoom(t, repo, room)
 
 	_, err := uc.PauseGame(ctx, "room-1", "p2")
 	if err != entity.ErrNotHost {
@@ -693,15 +683,13 @@ func TestPauseGame_NotHost(t *testing.T) {
 }
 
 func TestRebuy_CashGame(t *testing.T) {
-	repo := mock.NewRoomRepository()
-	bc := mock.NewWSBroadcaster()
-	uc := NewGameUseCase(repo, bc)
+	repo, uc := newGameTestDeps(t)
 	ctx := context.Background()
 
 	players := []entity.Player{
 		{ID: "host", Seat: 1, Stack: 500, Status: entity.PlayerStatusActive},
 	}
-	seedRoom(repo, "host", players)
+	seedRoom(t, repo, "host", players)
 
 	updated, err := uc.Rebuy(ctx, "room-1", "host", 1000)
 	if err != nil {
@@ -715,15 +703,13 @@ func TestRebuy_CashGame(t *testing.T) {
 }
 
 func TestRebuy_DefaultAmount(t *testing.T) {
-	repo := mock.NewRoomRepository()
-	bc := mock.NewWSBroadcaster()
-	uc := NewGameUseCase(repo, bc)
+	repo, uc := newGameTestDeps(t)
 	ctx := context.Background()
 
 	players := []entity.Player{
 		{ID: "host", Seat: 1, Stack: 0, Status: entity.PlayerStatusEliminated},
 	}
-	seedRoom(repo, "host", players)
+	seedRoom(t, repo, "host", players)
 
 	updated, _ := uc.Rebuy(ctx, "room-1", "host", 0)
 
@@ -737,15 +723,13 @@ func TestRebuy_DefaultAmount(t *testing.T) {
 }
 
 func TestRebuy_TournamentDenied(t *testing.T) {
-	repo := mock.NewRoomRepository()
-	bc := mock.NewWSBroadcaster()
-	uc := NewGameUseCase(repo, bc)
+	repo, uc := newGameTestDeps(t)
 	ctx := context.Background()
 
 	players := []entity.Player{
 		{ID: "host", Seat: 1, Stack: 500, Status: entity.PlayerStatusActive},
 	}
-	seedRoom(repo, "host", players, func(r *entity.Room) {
+	seedRoom(t, repo, "host", players, func(r *entity.Room) {
 		r.Config.GameMode = entity.GameModeTournament
 	})
 
@@ -756,15 +740,13 @@ func TestRebuy_TournamentDenied(t *testing.T) {
 }
 
 func TestRebuy_PlayerNotFound(t *testing.T) {
-	repo := mock.NewRoomRepository()
-	bc := mock.NewWSBroadcaster()
-	uc := NewGameUseCase(repo, bc)
+	repo, uc := newGameTestDeps(t)
 	ctx := context.Background()
 
 	players := []entity.Player{
 		{ID: "host", Seat: 1, Stack: 1000},
 	}
-	seedRoom(repo, "host", players)
+	seedRoom(t, repo, "host", players)
 
 	_, err := uc.Rebuy(ctx, "room-1", "nonexistent", 1000)
 	if err != entity.ErrPlayerNotFound {
@@ -773,9 +755,7 @@ func TestRebuy_PlayerNotFound(t *testing.T) {
 }
 
 func TestKickPlayer_Success(t *testing.T) {
-	repo := mock.NewRoomRepository()
-	bc := mock.NewWSBroadcaster()
-	uc := NewGameUseCase(repo, bc)
+	repo, uc := newGameTestDeps(t)
 	ctx := context.Background()
 
 	players := []entity.Player{
@@ -783,7 +763,7 @@ func TestKickPlayer_Success(t *testing.T) {
 		{ID: "p2", Seat: 2, Stack: 1000},
 		{ID: "p3", Seat: 3, Stack: 1000},
 	}
-	seedRoom(repo, "host", players)
+	seedRoom(t, repo, "host", players)
 
 	updated, err := uc.KickPlayer(ctx, "room-1", "host", "p2")
 	if err != nil {
@@ -799,16 +779,14 @@ func TestKickPlayer_Success(t *testing.T) {
 }
 
 func TestKickPlayer_NotHost(t *testing.T) {
-	repo := mock.NewRoomRepository()
-	bc := mock.NewWSBroadcaster()
-	uc := NewGameUseCase(repo, bc)
+	repo, uc := newGameTestDeps(t)
 	ctx := context.Background()
 
 	players := []entity.Player{
 		{ID: "host", Seat: 1, Stack: 1000},
 		{ID: "p2", Seat: 2, Stack: 1000},
 	}
-	seedRoom(repo, "host", players)
+	seedRoom(t, repo, "host", players)
 
 	_, err := uc.KickPlayer(ctx, "room-1", "p2", "host")
 	if err != entity.ErrNotHost {
@@ -825,7 +803,8 @@ func TestCalculatePots_SinglePot(t *testing.T) {
 		},
 	}
 
-	pots := CalculatePots(round)
+	uc := &GameUseCase{}
+	pots := uc.CalculatePots(round)
 	if len(pots) != 1 {
 		t.Fatalf("expected 1 pot, got %d", len(pots))
 	}
@@ -846,7 +825,8 @@ func TestCalculatePots_SidePots(t *testing.T) {
 		},
 	}
 
-	pots := CalculatePots(round)
+	uc := &GameUseCase{}
+	pots := uc.CalculatePots(round)
 	if len(pots) != 2 {
 		t.Fatalf("expected 2 pots, got %d", len(pots))
 	}
@@ -868,7 +848,8 @@ func TestCalculatePots_FoldedPlayersIneligible(t *testing.T) {
 		},
 	}
 
-	pots := CalculatePots(round)
+	uc := &GameUseCase{}
+	pots := uc.CalculatePots(round)
 	if len(pots) != 1 {
 		t.Fatalf("expected 1 pot, got %d", len(pots))
 	}
@@ -891,7 +872,8 @@ func TestCalculatePots_AllZero(t *testing.T) {
 		},
 	}
 
-	pots := CalculatePots(round)
+	uc := &GameUseCase{}
+	pots := uc.CalculatePots(round)
 	if len(pots) != 1 {
 		t.Fatalf("expected 1 empty pot, got %d", len(pots))
 	}
@@ -910,7 +892,8 @@ func TestCalculatePots_MultipleSidePots(t *testing.T) {
 		},
 	}
 
-	pots := CalculatePots(round)
+	uc := &GameUseCase{}
+	pots := uc.CalculatePots(round)
 	if len(pots) != 3 {
 		t.Fatalf("expected 3 pots, got %d", len(pots))
 	}
@@ -939,18 +922,17 @@ func TestNextStreet(t *testing.T) {
 		{"invalid", ""},
 	}
 
+	uc := &GameUseCase{}
 	for _, tt := range tests {
-		result := nextStreet(tt.current)
+		result := uc.getNextStreet(tt.current)
 		if result != tt.expected {
-			t.Errorf("nextStreet(%s): expected %s, got %s", tt.current, tt.expected, result)
+			t.Errorf("getNextStreet(%s): expected %s, got %s", tt.current, tt.expected, result)
 		}
 	}
 }
 
 func TestDealerRotation(t *testing.T) {
-	repo := mock.NewRoomRepository()
-	bc := mock.NewWSBroadcaster()
-	uc := NewGameUseCase(repo, bc)
+	repo, uc := newGameTestDeps(t)
 	ctx := context.Background()
 
 	players := []entity.Player{
@@ -958,7 +940,7 @@ func TestDealerRotation(t *testing.T) {
 		{ID: "p2", Seat: 2, Stack: 1000, Status: entity.PlayerStatusWaiting},
 		{ID: "p3", Seat: 3, Stack: 1000, Status: entity.PlayerStatusWaiting},
 	}
-	seedRoom(repo, "p1", players)
+	seedRoom(t, repo, "p1", players)
 
 	room1, _ := uc.StartRound(ctx, "room-1", "p1")
 	firstDealer := room1.Round.DealerSeat
@@ -967,12 +949,235 @@ func TestDealerRotation(t *testing.T) {
 	for i := range room1.Players {
 		room1.Players[i].Status = entity.PlayerStatusWaiting
 	}
-	_ = repo.Update(ctx, room1)
+	reseedRoom(t, repo, room1)
 
 	room2, _ := uc.StartRound(ctx, "room-1", "p1")
 	secondDealer := room2.Round.DealerSeat
 
 	if secondDealer == firstDealer {
 		t.Error("dealer should rotate between rounds")
+	}
+}
+
+func TestStartRound_ShortStackedBlind(t *testing.T) {
+	repo, uc := newGameTestDeps(t)
+	ctx := context.Background()
+
+	players := []entity.Player{
+		{ID: "p1", Seat: 1, Stack: 3, Status: entity.PlayerStatusWaiting},
+		{ID: "p2", Seat: 2, Stack: 1000, Status: entity.PlayerStatusWaiting},
+		{ID: "p3", Seat: 3, Stack: 1000, Status: entity.PlayerStatusWaiting},
+	}
+	seedRoom(t, repo, "p1", players)
+
+	room, err := uc.StartRound(ctx, "room-1", "p1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	p1 := room.FindPlayer("p1")
+	var p1State *entity.PlayerState
+	for i := range room.Round.PlayerStates {
+		if room.Round.PlayerStates[i].PlayerID == "p1" {
+			p1State = &room.Round.PlayerStates[i]
+			break
+		}
+	}
+
+	if p1 == nil || p1State == nil {
+		t.Fatal("p1 should be in round")
+	}
+
+	if p1.Stack < 0 {
+		t.Errorf("stack should not go negative, got %d", p1.Stack)
+	}
+	if p1State.TotalBet > 3 {
+		t.Errorf("short-stacked player should post at most 3, got %d", p1State.TotalBet)
+	}
+}
+
+func TestSettleRound_NoRound(t *testing.T) {
+	repo, uc := newGameTestDeps(t)
+	ctx := context.Background()
+
+	players := []entity.Player{
+		{ID: "host", Seat: 1, Stack: 1000},
+	}
+	seedRoom(t, repo, "host", players)
+
+	_, err := uc.SettleRound(ctx, "room-1", "host", dto.SettleRequest{})
+	if err != entity.ErrGameNotStarted {
+		t.Errorf("expected ErrGameNotStarted, got %v", err)
+	}
+}
+
+func TestSettleRound_InvalidPotIndex(t *testing.T) {
+	repo, uc := newGameTestDeps(t)
+	ctx := context.Background()
+
+	players := []entity.Player{
+		{ID: "p1", Seat: 1, Stack: 900, Status: entity.PlayerStatusActive},
+		{ID: "p2", Seat: 2, Stack: 900, Status: entity.PlayerStatusActive},
+	}
+	room := seedRoom(t, repo, "p1", players)
+	room.Round = &entity.Round{
+		Street:   entity.StreetShowdown,
+		BigBlind: 10,
+		PlayerStates: []entity.PlayerState{
+			{PlayerID: "p1", TotalBet: 100},
+			{PlayerID: "p2", TotalBet: 100},
+		},
+	}
+	reseedRoom(t, repo, room)
+
+	updated, err := uc.SettleRound(ctx, "room-1", "p1", dto.SettleRequest{
+		Winners: []dto.PotWinner{
+			{PotIndex: 99, PlayerIDs: []string{"p1"}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("invalid pot index should not error, got: %v", err)
+	}
+
+	p1 := updated.FindPlayer("p1")
+	if p1.Stack != 900 {
+		t.Errorf("player should not receive winnings for invalid pot index, stack=%d", p1.Stack)
+	}
+}
+
+func TestAdvanceStreet_MinRaiseResets(t *testing.T) {
+	repo, uc := newGameTestDeps(t)
+	ctx := context.Background()
+
+	players := []entity.Player{
+		{ID: "host", Seat: 1, Stack: 900, Status: entity.PlayerStatusActive},
+		{ID: "p2", Seat: 2, Stack: 900, Status: entity.PlayerStatusActive},
+	}
+	room := seedRoom(t, repo, "host", players)
+	room.Round = &entity.Round{
+		Number:     1,
+		Street:     entity.StreetPreflop,
+		DealerSeat: 1,
+		BigBlind:   10,
+		MinRaise:   50,
+		CurrentBet: 50,
+		PlayerStates: []entity.PlayerState{
+			{PlayerID: "host", Bet: 50, TotalBet: 50, HasActed: true},
+			{PlayerID: "p2", Bet: 50, TotalBet: 50, HasActed: true},
+		},
+	}
+	reseedRoom(t, repo, room)
+
+	updated, err := uc.AdvanceStreet(ctx, "room-1", "host")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if updated.Round.MinRaise != 10 {
+		t.Errorf("expected min raise reset to big blind (10), got %d", updated.Round.MinRaise)
+	}
+}
+
+func TestAdvanceStreet_PostflopFirstToActAfterDealer(t *testing.T) {
+	repo, uc := newGameTestDeps(t)
+	ctx := context.Background()
+
+	players := []entity.Player{
+		{ID: "p1", Seat: 1, Stack: 990, Status: entity.PlayerStatusActive},
+		{ID: "p2", Seat: 2, Stack: 990, Status: entity.PlayerStatusActive},
+		{ID: "p3", Seat: 3, Stack: 990, Status: entity.PlayerStatusActive},
+	}
+	room := seedRoom(t, repo, "p1", players)
+	room.Round = &entity.Round{
+		Number:     1,
+		Street:     entity.StreetPreflop,
+		DealerSeat: 1,
+		BigBlind:   10,
+		PlayerStates: []entity.PlayerState{
+			{PlayerID: "p1", HasActed: true},
+			{PlayerID: "p2", HasActed: true},
+			{PlayerID: "p3", HasActed: true},
+		},
+	}
+	reseedRoom(t, repo, room)
+
+	updated, err := uc.AdvanceStreet(ctx, "room-1", "p1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if updated.Round.CurrentTurn != "p2" {
+		t.Errorf("expected first to act postflop to be p2 (after dealer seat 1), got %s", updated.Round.CurrentTurn)
+	}
+}
+
+func TestPauseGame_WaitingStatusUnchanged(t *testing.T) {
+	repo, uc := newGameTestDeps(t)
+	ctx := context.Background()
+
+	players := []entity.Player{
+		{ID: "host", Seat: 1, Stack: 1000},
+	}
+	seedRoom(t, repo, "host", players)
+
+	updated, _ := uc.PauseGame(ctx, "room-1", "host")
+	if updated.Status != entity.RoomStatusWaiting {
+		t.Errorf("waiting room should remain waiting, got %s", updated.Status)
+	}
+}
+
+func TestRebuy_RevivesEliminatedPlayer(t *testing.T) {
+	repo, uc := newGameTestDeps(t)
+	ctx := context.Background()
+
+	players := []entity.Player{
+		{ID: "host", Seat: 1, Stack: 0, Status: entity.PlayerStatusEliminated},
+	}
+	seedRoom(t, repo, "host", players)
+
+	updated, err := uc.Rebuy(ctx, "room-1", "host", 500)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	host := updated.FindPlayer("host")
+	if host.Status != entity.PlayerStatusWaiting {
+		t.Errorf("expected status waiting after rebuy, got %s", host.Status)
+	}
+	if host.Stack != 500 {
+		t.Errorf("expected stack 500, got %d", host.Stack)
+	}
+}
+
+func TestStartRound_DealerWrapsAround(t *testing.T) {
+	repo, uc := newGameTestDeps(t)
+	ctx := context.Background()
+
+	players := []entity.Player{
+		{ID: "p1", Seat: 1, Stack: 1000, Status: entity.PlayerStatusWaiting},
+		{ID: "p2", Seat: 2, Stack: 1000, Status: entity.PlayerStatusWaiting},
+		{ID: "p3", Seat: 3, Stack: 1000, Status: entity.PlayerStatusWaiting},
+	}
+	room := seedRoom(t, repo, "p1", players)
+
+	room.RoundCount = 1
+	room.Round = &entity.Round{DealerSeat: 3}
+	reseedRoom(t, repo, room)
+
+	room.RoundCount = 1
+	room.Round = &entity.Round{DealerSeat: 3}
+	room.Status = entity.RoomStatusWaiting
+	for i := range room.Players {
+		room.Players[i].Status = entity.PlayerStatusWaiting
+	}
+	reseedRoom(t, repo, room)
+
+	started, err := uc.StartRound(ctx, "room-1", "p1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if started.Round.DealerSeat != 1 {
+		t.Errorf("expected dealer to wrap around to seat 1, got %d", started.Round.DealerSeat)
 	}
 }

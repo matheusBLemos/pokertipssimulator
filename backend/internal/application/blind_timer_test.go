@@ -6,12 +6,22 @@ import (
 	"testing"
 	"time"
 
-	"pokertipssimulator/internal/application/mock"
+	"pokertipssimulator/internal/adapter/repository"
+	"pokertipssimulator/internal/application/port"
 	"pokertipssimulator/internal/domain/entity"
 )
 
+func seedTimerRoom(t *testing.T, repo port.RoomRepository, room *entity.Room) {
+	t.Helper()
+	ctx := context.Background()
+	if err := repo.Create(ctx, room); err != nil {
+		t.Fatalf("seed timer room: %v", err)
+	}
+}
+
 func TestBlindTimer_AdvancesLevel(t *testing.T) {
-	repo := mock.NewRoomRepository()
+	db := repository.NewTestDB(t)
+	repo := repository.NewSQLiteRoomRepository(db)
 	ctx := context.Background()
 
 	room := &entity.Room{
@@ -30,7 +40,7 @@ func TestBlindTimer_AdvancesLevel(t *testing.T) {
 			},
 		},
 	}
-	repo.Seed(room)
+	seedTimerRoom(t, repo, room)
 
 	var mu sync.Mutex
 	ticks := 0
@@ -59,7 +69,8 @@ func TestBlindTimer_AdvancesLevel(t *testing.T) {
 }
 
 func TestBlindTimer_StopsAtLastLevel(t *testing.T) {
-	repo := mock.NewRoomRepository()
+	db := repository.NewTestDB(t)
+	repo := repository.NewSQLiteRoomRepository(db)
 	ctx := context.Background()
 
 	room := &entity.Room{
@@ -76,7 +87,7 @@ func TestBlindTimer_StopsAtLastLevel(t *testing.T) {
 			},
 		},
 	}
-	repo.Seed(room)
+	seedTimerRoom(t, repo, room)
 
 	timer := NewBlindTimer(repo, "room-1", nil)
 	timer.Start()
@@ -90,7 +101,8 @@ func TestBlindTimer_StopsAtLastLevel(t *testing.T) {
 }
 
 func TestBlindTimer_SkipsCashGame(t *testing.T) {
-	repo := mock.NewRoomRepository()
+	db := repository.NewTestDB(t)
+	repo := repository.NewSQLiteRoomRepository(db)
 	ctx := context.Background()
 
 	room := &entity.Room{
@@ -108,7 +120,7 @@ func TestBlindTimer_SkipsCashGame(t *testing.T) {
 			},
 		},
 	}
-	repo.Seed(room)
+	seedTimerRoom(t, repo, room)
 
 	timer := NewBlindTimer(repo, "room-1", nil)
 	timer.Start()
@@ -122,7 +134,8 @@ func TestBlindTimer_SkipsCashGame(t *testing.T) {
 }
 
 func TestBlindTimer_PausedGameDoesNotAdvance(t *testing.T) {
-	repo := mock.NewRoomRepository()
+	db := repository.NewTestDB(t)
+	repo := repository.NewSQLiteRoomRepository(db)
 	ctx := context.Background()
 
 	room := &entity.Room{
@@ -140,7 +153,7 @@ func TestBlindTimer_PausedGameDoesNotAdvance(t *testing.T) {
 			},
 		},
 	}
-	repo.Seed(room)
+	seedTimerRoom(t, repo, room)
 
 	timer := NewBlindTimer(repo, "room-1", nil)
 	timer.Start()
@@ -154,7 +167,8 @@ func TestBlindTimer_PausedGameDoesNotAdvance(t *testing.T) {
 }
 
 func TestBlindTimer_ManualDurationSkipsAdvance(t *testing.T) {
-	repo := mock.NewRoomRepository()
+	db := repository.NewTestDB(t)
+	repo := repository.NewSQLiteRoomRepository(db)
 	ctx := context.Background()
 
 	room := &entity.Room{
@@ -172,7 +186,7 @@ func TestBlindTimer_ManualDurationSkipsAdvance(t *testing.T) {
 			},
 		},
 	}
-	repo.Seed(room)
+	seedTimerRoom(t, repo, room)
 
 	timer := NewBlindTimer(repo, "room-1", nil)
 	timer.Start()
@@ -186,7 +200,8 @@ func TestBlindTimer_ManualDurationSkipsAdvance(t *testing.T) {
 }
 
 func TestBlindTimer_StopIsIdempotent(t *testing.T) {
-	repo := mock.NewRoomRepository()
+	db := repository.NewTestDB(t)
+	repo := repository.NewSQLiteRoomRepository(db)
 
 	room := &entity.Room{
 		ID:     "room-1",
@@ -200,7 +215,7 @@ func TestBlindTimer_StopIsIdempotent(t *testing.T) {
 			},
 		},
 	}
-	repo.Seed(room)
+	seedTimerRoom(t, repo, room)
 
 	timer := NewBlindTimer(repo, "room-1", nil)
 	timer.Start()

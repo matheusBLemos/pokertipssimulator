@@ -3,17 +3,17 @@ package handler
 import (
 	"github.com/gofiber/fiber/v2"
 
-	"pokertipssimulator/internal/dto"
-	"pokertipssimulator/internal/usecase"
-	"pokertipssimulator/internal/ws"
+	"pokertipssimulator/internal/adapter/ws"
+	"pokertipssimulator/internal/application"
+	"pokertipssimulator/internal/application/dto"
 )
 
 type GameHandler struct {
-	uc  *usecase.GameUseCase
+	uc  *application.GameUseCase
 	hub *ws.Hub
 }
 
-func NewGameHandler(uc *usecase.GameUseCase, hub *ws.Hub) *GameHandler {
+func NewGameHandler(uc *application.GameUseCase, hub *ws.Hub) *GameHandler {
 	return &GameHandler{uc: uc, hub: hub}
 }
 

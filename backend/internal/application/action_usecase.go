@@ -9,12 +9,11 @@ import (
 )
 
 type ActionUseCase struct {
-	repo        port.RoomRepository
-	broadcaster port.WSBroadcaster
+	repo port.RoomRepository
 }
 
-func NewActionUseCase(repo port.RoomRepository, broadcaster port.WSBroadcaster) *ActionUseCase {
-	return &ActionUseCase{repo: repo, broadcaster: broadcaster}
+func NewActionUseCase(repo port.RoomRepository) *ActionUseCase {
+	return &ActionUseCase{repo: repo}
 }
 
 func (uc *ActionUseCase) ProcessAction(ctx context.Context, roomID, playerID string, actionType entity.ActionType, amount int) (*entity.Room, error) {
@@ -41,12 +40,12 @@ func (uc *ActionUseCase) ProcessAction(ctx context.Context, roomID, playerID str
 		return nil, entity.ErrPlayerNotFound
 	}
 
-	ps := findPlayerState(round, playerID)
+	ps := FindPlayerState(round, playerID)
 	if ps == nil {
 		return nil, entity.ErrPlayerNotFound
 	}
 
-	if err := validateAction(round, player, ps, actionType, amount); err != nil {
+	if err := uc.validateAction(round, player, ps, actionType, amount); err != nil {
 		return nil, err
 	}
 
@@ -81,7 +80,7 @@ func (uc *ActionUseCase) ProcessAction(ctx context.Context, roomID, playerID str
 		if player.Stack == 0 {
 			ps.AllIn = true
 		}
-		resetActedFlags(round, playerID)
+		uc.resetActedFlags(round, playerID)
 
 	case entity.ActionRaise:
 		raiseAmount := amount - ps.Bet
@@ -97,7 +96,7 @@ func (uc *ActionUseCase) ProcessAction(ctx context.Context, roomID, playerID str
 		if player.Stack == 0 {
 			ps.AllIn = true
 		}
-		resetActedFlags(round, playerID)
+		uc.resetActedFlags(round, playerID)
 
 	case entity.ActionAllIn:
 		allInAmount := player.Stack
@@ -112,7 +111,7 @@ func (uc *ActionUseCase) ProcessAction(ctx context.Context, roomID, playerID str
 				round.MinRaise = raiseDiff
 			}
 			round.CurrentBet = ps.Bet
-			resetActedFlags(round, playerID)
+			uc.resetActedFlags(round, playerID)
 		}
 	}
 
@@ -123,7 +122,7 @@ func (uc *ActionUseCase) ProcessAction(ctx context.Context, roomID, playerID str
 		Street:   round.Street,
 	})
 
-	advanceTurn(room, round)
+	uc.advanceTurn(room, round)
 
 	if err := uc.repo.Update(ctx, room); err != nil {
 		return nil, err
@@ -131,7 +130,7 @@ func (uc *ActionUseCase) ProcessAction(ctx context.Context, roomID, playerID str
 	return room, nil
 }
 
-func validateAction(round *entity.Round, player *entity.Player, ps *entity.PlayerState, actionType entity.ActionType, amount int) error {
+func (uc *ActionUseCase) validateAction(round *entity.Round, player *entity.Player, ps *entity.PlayerState, actionType entity.ActionType, amount int) error {
 	switch actionType {
 	case entity.ActionFold:
 		return nil
@@ -181,7 +180,7 @@ func validateAction(round *entity.Round, player *entity.Player, ps *entity.Playe
 	}
 }
 
-func resetActedFlags(round *entity.Round, exceptPlayerID string) {
+func (uc *ActionUseCase) resetActedFlags(round *entity.Round, exceptPlayerID string) {
 	for i := range round.PlayerStates {
 		if round.PlayerStates[i].PlayerID != exceptPlayerID &&
 			!round.PlayerStates[i].Folded &&
@@ -191,7 +190,7 @@ func resetActedFlags(round *entity.Round, exceptPlayerID string) {
 	}
 }
 
-func advanceTurn(room *entity.Room, round *entity.Round) {
+func (uc *ActionUseCase) advanceTurn(room *entity.Room, round *entity.Round) {
 	activePlayers := room.ActivePlayers()
 	sort.Slice(activePlayers, func(i, j int) bool {
 		return activePlayers[i].Seat < activePlayers[j].Seat
@@ -247,7 +246,7 @@ func advanceTurn(room *entity.Room, round *entity.Round) {
 
 	for i := 1; i <= len(activePlayers); i++ {
 		idx := (currentIdx + i) % len(activePlayers)
-		ps := findPlayerState(round, activePlayers[idx].ID)
+		ps := FindPlayerState(round, activePlayers[idx].ID)
 		if ps != nil && !ps.Folded && !ps.AllIn && !ps.HasActed {
 			round.CurrentTurn = activePlayers[idx].ID
 			return
