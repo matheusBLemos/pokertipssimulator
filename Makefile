@@ -18,7 +18,7 @@ lint:
 	go vet ./...
 
 clean:
-	rm -rf build/windows/$(BINARY_NAME).exe build/mac/$(BINARY_NAME) build/linux/$(BINARY_NAME)
+	rm -rf build/windows build/mac build/linux
 
 # ── Build ────────────────────────────────────────────────────
 
@@ -31,20 +31,24 @@ embed-frontend: build-frontend
 	rm -rf internal/frontend/dist
 	cp -r frontend/dist internal/frontend/dist
 
-build-all: embed-frontend build-windows build-mac build-linux
-	cp build/env.example build/windows/.env
-	cp build/env.example build/mac/.env
-	cp build/env.example build/linux/.env
+build-all: embed-frontend
+	@$(MAKE) build-windows-only
+	@$(MAKE) build-mac-only
+	@$(MAKE) build-linux-only
 	@echo "Build complete! Check the build/ directory."
 
-build-windows:
+build-windows: embed-frontend build-windows-only
+build-mac: embed-frontend build-mac-only
+build-linux: embed-frontend build-linux-only
+
+build-windows-only:
 	mkdir -p build/windows
 	GOOS=windows GOARCH=amd64 go build -o build/windows/$(BINARY_NAME).exe ./cmd/server
 
-build-mac:
+build-mac-only:
 	mkdir -p build/mac
 	GOOS=darwin GOARCH=arm64 go build -o build/mac/$(BINARY_NAME) ./cmd/server
 
-build-linux:
+build-linux-only:
 	mkdir -p build/linux
 	GOOS=linux GOARCH=amd64 go build -o build/linux/$(BINARY_NAME) ./cmd/server

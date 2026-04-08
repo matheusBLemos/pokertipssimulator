@@ -49,7 +49,8 @@ func (h *RoomHandler) GetRoom(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	return c.JSON(room)
+	playerID, _ := c.Locals("playerID").(string)
+	return c.JSON(room.FilterForPlayer(playerID))
 }
 
 func (h *RoomHandler) UpdateConfig(c *fiber.Ctx) error {

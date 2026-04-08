@@ -68,5 +68,17 @@ export function useGameActions() {
     }
   }, [room, setRoom]);
 
-  return { performAction, startRound, advanceStreet, settleRound, pauseGame };
+  const autoSettleRound = useCallback(async () => {
+    if (!room) return;
+    try {
+      const updated = await gameApi.autoSettleRound(room.id);
+      setRoom(updated);
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : 'Failed to auto-settle round'
+      );
+    }
+  }, [room, setRoom]);
+
+  return { performAction, startRound, advanceStreet, settleRound, pauseGame, autoSettleRound };
 }

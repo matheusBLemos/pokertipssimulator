@@ -8,7 +8,7 @@ interface HostControlsProps {
 }
 
 export default function HostControls({ room, onSettleClick }: HostControlsProps) {
-  const { advanceStreet, pauseGame, startRound } = useGameActions();
+  const { advanceStreet, pauseGame, startRound, autoSettleRound } = useGameActions();
   const round = room.round;
 
   if (!round && room.status === 'waiting') {
@@ -41,12 +41,20 @@ export default function HostControls({ room, onSettleClick }: HostControlsProps)
       )}
 
       {isShowdown && (
-        <button
-          onClick={onSettleClick}
-          className="flex-1 py-2 bg-amber-600 hover:bg-amber-500 text-white font-medium rounded-lg text-sm transition-colors"
-        >
-          Select Winner
-        </button>
+        <>
+          <button
+            onClick={autoSettleRound}
+            className="flex-1 py-2 bg-green-600 hover:bg-green-500 text-white font-medium rounded-lg text-sm transition-colors"
+          >
+            Auto-Settle
+          </button>
+          <button
+            onClick={onSettleClick}
+            className="py-2 px-3 bg-amber-600 hover:bg-amber-500 text-white font-medium rounded-lg text-sm transition-colors"
+          >
+            Manual
+          </button>
+        </>
       )}
 
       <button

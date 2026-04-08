@@ -4,6 +4,14 @@ export type PlayerStatus = 'waiting' | 'active' | 'sitting_out' | 'eliminated' |
 export type Street = 'preflop' | 'flop' | 'turn' | 'river' | 'showdown';
 export type ActionType = 'fold' | 'check' | 'call' | 'bet' | 'raise' | 'allin';
 
+export type CardRank = '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | 'T' | 'J' | 'Q' | 'K' | 'A';
+export type CardSuit = 's' | 'h' | 'd' | 'c';
+
+export interface Card {
+  rank: CardRank;
+  suit: CardSuit;
+}
+
 export interface Player {
   id: string;
   name: string;
@@ -19,6 +27,7 @@ export interface PlayerState {
   has_acted: boolean;
   folded: boolean;
   all_in: boolean;
+  hole_cards?: Card[];
 }
 
 export interface Pot {
@@ -76,6 +85,7 @@ export interface Round {
   pots: Pot[];
   actions: Action[];
   is_complete: boolean;
+  community_cards?: Card[];
 }
 
 export type RoomMode = 'game' | 'tips';

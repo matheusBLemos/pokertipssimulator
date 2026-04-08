@@ -8,7 +8,7 @@ import ActionBar from '../../components/table/ActionBar';
 import BlindTimer from '../../components/table/BlindTimer';
 import HostControls from '../../components/host/HostControls';
 import SettlementModal from '../../components/host/SettlementModal';
-import RebuyModal from '../../components/room/RebuyModal';
+import RebuyModal from '../../components/host/RebuyModal';
 import EliminatedOverlay from '../../components/table/EliminatedOverlay';
 import toast from 'react-hot-toast';
 

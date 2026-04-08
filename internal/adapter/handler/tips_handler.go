@@ -3,18 +3,19 @@ package handler
 import (
 	"github.com/gofiber/fiber/v2"
 
-	"pokertipssimulator/internal/adapter/ws"
 	"pokertipssimulator/internal/application"
 	"pokertipssimulator/internal/application/dto"
+	"pokertipssimulator/internal/application/port"
+	"pokertipssimulator/internal/domain/event"
 )
 
 type TipsHandler struct {
-	uc  *application.TipsUseCase
-	hub *ws.Hub
+	uc          *application.TipsUseCase
+	broadcaster port.WSBroadcaster
 }
 
-func NewTipsHandler(uc *application.TipsUseCase, hub *ws.Hub) *TipsHandler {
-	return &TipsHandler{uc: uc, hub: hub}
+func NewTipsHandler(uc *application.TipsUseCase, broadcaster port.WSBroadcaster) *TipsHandler {
+	return &TipsHandler{uc: uc, broadcaster: broadcaster}
 }
 
 func (h *TipsHandler) TransferChips(c *fiber.Ctx) error {
@@ -30,7 +31,7 @@ func (h *TipsHandler) TransferChips(c *fiber.Ctx) error {
 		return err
 	}
 
-	h.hub.BroadcastToRoom(roomID, ws.NewMessage(ws.MsgTypeChipsTransferred, room))
+	h.broadcaster.BroadcastToRoom(roomID, string(event.ChipsTransferred), room)
 	return c.JSON(room)
 }
 
@@ -43,7 +44,7 @@ func (h *TipsHandler) AdvanceBlind(c *fiber.Ctx) error {
 		return err
 	}
 
-	h.hub.BroadcastToRoom(roomID, ws.NewMessage(ws.MsgTypeBlindLevelChanged, room))
+	h.broadcaster.BroadcastToRoom(roomID, string(event.BlindLevelChanged), room)
 	return c.JSON(room)
 }
 
@@ -56,11 +57,11 @@ func (h *TipsHandler) PauseTimer(c *fiber.Ctx) error {
 		return err
 	}
 
-	msgType := ws.MsgTypeGamePaused
+	msgType := event.GamePaused
 	if room.Status == "playing" {
-		msgType = ws.MsgTypeGameResumed
+		msgType = event.GameResumed
 	}
-	h.hub.BroadcastToRoom(roomID, ws.NewMessage(msgType, room))
+	h.broadcaster.BroadcastToRoom(roomID, string(msgType), room)
 	return c.JSON(room)
 }
 
@@ -79,7 +80,7 @@ func (h *TipsHandler) Rebuy(c *fiber.Ctx) error {
 		return err
 	}
 
-	h.hub.BroadcastToRoom(roomID, ws.NewMessage(ws.MsgTypeStackUpdated, room))
+	h.broadcaster.BroadcastToRoom(roomID, string(event.StackUpdated), room)
 	return c.JSON(room)
 }
 
@@ -93,6 +94,6 @@ func (h *TipsHandler) KickPlayer(c *fiber.Ctx) error {
 		return err
 	}
 
-	h.hub.BroadcastToRoom(roomID, ws.NewMessage(ws.MsgTypePlayerLeft, map[string]string{"player_id": targetID}))
+	h.broadcaster.BroadcastToRoom(roomID, string(event.PlayerLeft), map[string]string{"player_id": targetID})
 	return c.JSON(room)
 }

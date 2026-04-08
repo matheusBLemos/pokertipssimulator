@@ -4,9 +4,10 @@ import type {
   Room,
   ActionType,
 } from '../types';
+import { useRoomStore } from '../store/roomStore';
 
 function getToken(): string {
-  return localStorage.getItem('poker_token') ?? '';
+  return useRoomStore.getState().token ?? localStorage.getItem('poker_token') ?? '';
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -95,6 +96,11 @@ export const gameApi = {
       body: JSON.stringify({ winners }),
     }),
 
+  autoSettleRound: (roomId: string) =>
+    request<Room>(`/api/v1/game/rooms/${roomId}/rounds/auto-settle`, {
+      method: 'POST',
+    }),
+
   pauseGame: (roomId: string) =>
     request<Room>(`/api/v1/game/rooms/${roomId}/pause`, { method: 'POST' }),
 
@@ -125,4 +131,3 @@ export const tipsApi = {
     request<Room>(`/api/v1/tips/rooms/${roomId}/pause`, { method: 'POST' }),
 };
 
-export const api = gameApi;

@@ -37,6 +37,7 @@ func SetupRoutes(
 	gameRooms.Post("/rounds/start", gameH.StartRound)
 	gameRooms.Post("/rounds/advance", gameH.AdvanceStreet)
 	gameRooms.Post("/rounds/settle", gameH.SettleRound)
+	gameRooms.Post("/rounds/auto-settle", gameH.AutoSettleRound)
 	gameRooms.Post("/pause", gameH.PauseGame)
 	gameRooms.Post("/players/:playerId/rebuy", gameH.Rebuy)
 	gameRooms.Post("/action", actionH.PerformAction)

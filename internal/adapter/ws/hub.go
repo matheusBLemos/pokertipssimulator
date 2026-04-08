@@ -55,7 +55,8 @@ func (h *Hub) Run() {
 	}
 }
 
-func (h *Hub) BroadcastToRoom(roomID string, msg Message) {
+func (h *Hub) BroadcastToRoom(roomID string, msgType string, payload interface{}) {
+	msg := NewMessage(MessageType(msgType), payload)
 	data, err := json.Marshal(msg)
 	if err != nil {
 		log.Printf("ws: marshal error: %v", err)
@@ -77,7 +78,8 @@ func (h *Hub) BroadcastToRoom(roomID string, msg Message) {
 	}
 }
 
-func (h *Hub) SendToPlayer(roomID, playerID string, msg Message) {
+func (h *Hub) SendToPlayer(roomID, playerID string, msgType string, payload interface{}) {
+	msg := NewMessage(MessageType(msgType), payload)
 	data, err := json.Marshal(msg)
 	if err != nil {
 		return
@@ -94,6 +96,32 @@ func (h *Hub) SendToPlayer(roomID, playerID string, msg Message) {
 				default:
 				}
 			}
+		}
+	}
+}
+
+func (h *Hub) BroadcastPerPlayer(roomID string, msgType string, buildPayload func(playerID string) interface{}) {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	clients, ok := h.Rooms[roomID]
+	if !ok {
+		return
+	}
+
+	for client := range clients {
+		payload := buildPayload(client.PlayerID)
+		msg := NewMessage(MessageType(msgType), payload)
+		data, err := json.Marshal(msg)
+		if err != nil {
+			log.Printf("ws: marshal error: %v", err)
+			continue
+		}
+		select {
+		case client.Send <- data:
+		default:
+			close(client.Send)
+			delete(clients, client)
 		}
 	}
 }

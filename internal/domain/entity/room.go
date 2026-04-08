@@ -88,3 +88,31 @@ func (r *Room) SeatedPlayers() []Player {
 	}
 	return seated
 }
+
+// FilterForPlayer returns a copy of the room with sensitive data stripped:
+// the deck is removed, and other players' hole cards are hidden (unless showdown).
+func (r *Room) FilterForPlayer(playerID string) *Room {
+	if r.Round == nil {
+		return r
+	}
+
+	copy := *r
+	roundCopy := *r.Round
+	copy.Round = &roundCopy
+
+	// Never send the deck to clients
+	roundCopy.Deck = nil
+
+	isShowdown := roundCopy.Street == StreetShowdown || roundCopy.IsComplete
+
+	states := make([]PlayerState, len(roundCopy.PlayerStates))
+	for i, ps := range roundCopy.PlayerStates {
+		states[i] = ps
+		if ps.PlayerID != playerID && !isShowdown {
+			states[i].HoleCards = nil
+		}
+	}
+	roundCopy.PlayerStates = states
+
+	return &copy
+}

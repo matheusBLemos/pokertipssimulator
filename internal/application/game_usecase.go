@@ -50,22 +50,29 @@ func (uc *GameUseCase) StartRound(ctx context.Context, roomID, playerID string) 
 
 	blindLevel := room.Config.BlindStructure.Levels[room.Config.BlindStructure.CurrentLevel]
 
+	deck := entity.NewDeck()
+	deck.Shuffle()
+
 	var playerStates []entity.PlayerState
 	for _, p := range activePlayers {
+		holeCards := deck.Deal(2)
 		playerStates = append(playerStates, entity.PlayerState{
-			PlayerID: p.ID,
+			PlayerID:  p.ID,
+			HoleCards: holeCards,
 		})
 	}
 
 	round := &entity.Round{
-		Number:       room.RoundCount,
-		Street:       entity.StreetPreflop,
-		DealerSeat:   dealerSeat,
-		SmallBlind:   blindLevel.SmallBlind,
-		BigBlind:     blindLevel.BigBlind,
-		PlayerStates: playerStates,
-		Pots:         []entity.Pot{},
-		Actions:      []entity.Action{},
+		Number:         room.RoundCount,
+		Street:         entity.StreetPreflop,
+		DealerSeat:     dealerSeat,
+		SmallBlind:     blindLevel.SmallBlind,
+		BigBlind:       blindLevel.BigBlind,
+		PlayerStates:   playerStates,
+		Pots:           []entity.Pot{},
+		Actions:        []entity.Action{},
+		Deck:           deck.Cards,
+		CommunityCards: []entity.Card{},
 	}
 
 	uc.postBlinds(room, round, activePlayers)
@@ -100,6 +107,16 @@ func (uc *GameUseCase) AdvanceStreet(ctx context.Context, roomID, playerID strin
 	}
 
 	uc.collectBets(round)
+
+	deck := &entity.Deck{Cards: round.Deck}
+
+	switch nextStreet {
+	case entity.StreetFlop:
+		round.CommunityCards = append(round.CommunityCards, deck.Deal(3)...)
+	case entity.StreetTurn, entity.StreetRiver:
+		round.CommunityCards = append(round.CommunityCards, deck.Deal(1)...)
+	}
+	round.Deck = deck.Cards
 
 	round.Street = nextStreet
 	round.CurrentBet = 0
@@ -146,24 +163,28 @@ func (uc *GameUseCase) SettleRound(ctx context.Context, roomID, playerID string,
 	pots := uc.CalculatePots(room.Round)
 	room.Round.Pots = pots
 
-	for _, w := range req.Winners {
-		if w.PotIndex < 0 || w.PotIndex >= len(pots) {
-			continue
-		}
-		pot := pots[w.PotIndex]
-		share := pot.Amount / len(w.PlayerIDs)
-		remainder := pot.Amount % len(w.PlayerIDs)
+	if len(req.Winners) > 0 {
+		for _, w := range req.Winners {
+			if w.PotIndex < 0 || w.PotIndex >= len(pots) {
+				continue
+			}
+			pot := pots[w.PotIndex]
+			share := pot.Amount / len(w.PlayerIDs)
+			remainder := pot.Amount % len(w.PlayerIDs)
 
-		for i, pid := range w.PlayerIDs {
-			player := room.FindPlayer(pid)
-			if player != nil {
-				winAmount := share
-				if i == 0 {
-					winAmount += remainder
+			for i, pid := range w.PlayerIDs {
+				player := room.FindPlayer(pid)
+				if player != nil {
+					winAmount := share
+					if i == 0 {
+						winAmount += remainder
+					}
+					player.Stack += winAmount
 				}
-				player.Stack += winAmount
 			}
 		}
+	} else {
+		uc.autoSettle(room, pots)
 	}
 
 	room.Round.IsComplete = true
@@ -182,6 +203,58 @@ func (uc *GameUseCase) SettleRound(ctx context.Context, roomID, playerID string,
 		return nil, err
 	}
 	return room, nil
+}
+
+func (uc *GameUseCase) autoSettle(room *entity.Room, pots []entity.Pot) {
+	round := room.Round
+
+	for _, pot := range pots {
+		var bestHand entity.EvaluatedHand
+		var winnerIDs []string
+		first := true
+
+		for _, pid := range pot.EligibleIDs {
+			ps := FindPlayerState(round, pid)
+			if ps == nil || ps.Folded {
+				continue
+			}
+
+			allCards := append([]entity.Card{}, ps.HoleCards...)
+			allCards = append(allCards, round.CommunityCards...)
+			hand := entity.EvaluateBestHand(allCards)
+
+			if first {
+				bestHand = hand
+				winnerIDs = []string{pid}
+				first = false
+			} else {
+				cmp := hand.Beats(bestHand)
+				if cmp > 0 {
+					bestHand = hand
+					winnerIDs = []string{pid}
+				} else if cmp == 0 {
+					winnerIDs = append(winnerIDs, pid)
+				}
+			}
+		}
+
+		if len(winnerIDs) == 0 {
+			continue
+		}
+
+		share := pot.Amount / len(winnerIDs)
+		remainder := pot.Amount % len(winnerIDs)
+		for i, pid := range winnerIDs {
+			player := room.FindPlayer(pid)
+			if player != nil {
+				winAmount := share
+				if i == 0 {
+					winAmount += remainder
+				}
+				player.Stack += winAmount
+			}
+		}
+	}
 }
 
 func (uc *GameUseCase) PauseGame(ctx context.Context, roomID, playerID string) (*entity.Room, error) {

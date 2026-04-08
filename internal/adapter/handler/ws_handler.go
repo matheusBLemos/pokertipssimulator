@@ -9,6 +9,7 @@ import (
 
 	"pokertipssimulator/internal/adapter/ws"
 	"pokertipssimulator/internal/application"
+	"pokertipssimulator/internal/domain/event"
 )
 
 type WSHandler struct {
@@ -55,7 +56,7 @@ func (h *WSHandler) Handle(c *websocket.Conn) {
 
 	room, err := h.uc.GetRoom(context.Background(), roomID)
 	if err == nil {
-		h.hub.SendToPlayer(roomID, playerID, ws.NewMessage(ws.MsgTypeRoomState, room))
+		h.hub.SendToPlayer(roomID, playerID, string(event.RoomStateChanged), room.FilterForPlayer(playerID))
 	}
 
 	go client.WritePump()

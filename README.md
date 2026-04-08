@@ -56,17 +56,19 @@ make dev-frontend
 
 ## Production Build (Single Binary)
 
-The production build compiles the React frontend into the Go binary using `go:embed`, producing a **single self-contained executable**. No Node.js, no separate frontend server, no database setup — just run the binary.
+The production build automatically builds the React frontend, embeds it into the Go binary using `go:embed`, and produces a **single self-contained executable**. No Node.js, no separate frontend server, no database setup — just run the binary.
 
 ```bash
-# Build for all platforms
+# Build for all platforms at once
 make build-all
 
-# Or build for a specific platform
+# Or build for a specific platform (frontend is built automatically)
 make build-mac
 make build-linux
 make build-windows
 ```
+
+Each target runs the full pipeline: `npm ci` + `npm run build` + copy to embed dir + `go build`.
 
 Binaries are output to `build/<platform>/`. Run directly:
 
@@ -88,18 +90,18 @@ Create a `.env` file in the project root (optional — defaults work out of the 
 
 ## Makefile Targets
 
-| Target           | Description                                |
-|------------------|--------------------------------------------|
-| `dev-backend`    | Run backend with `go run`                  |
-| `dev-frontend`   | Run frontend Vite dev server               |
-| `test`           | Run all Go tests                           |
-| `lint`           | Run `go vet`                               |
-| `build-frontend` | Build frontend production bundle           |
-| `embed-frontend` | Build frontend and copy into embed dir     |
-| `build-all`      | Build binaries for all platforms            |
-| `build-mac`      | Build macOS arm64 binary                   |
-| `build-linux`    | Build Linux amd64 binary                   |
-| `build-windows`  | Build Windows amd64 binary                 |
+| Target           | Description                                          |
+|------------------|------------------------------------------------------|
+| `dev-backend`    | Run backend with `go run`                            |
+| `dev-frontend`   | Run frontend Vite dev server                         |
+| `test`           | Run all Go tests                                     |
+| `lint`           | Run `go vet`                                         |
+| `build-frontend` | Build frontend production bundle                     |
+| `embed-frontend` | Build frontend and copy into embed dir               |
+| `build-all`      | Full build for all platforms (frontend + Go binaries) |
+| `build-mac`      | Full build for macOS arm64 (frontend + Go binary)    |
+| `build-linux`    | Full build for Linux amd64 (frontend + Go binary)    |
+| `build-windows`  | Full build for Windows amd64 (frontend + Go binary)  |
 
 ## Running Tests
 

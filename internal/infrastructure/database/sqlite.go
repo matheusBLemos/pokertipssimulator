@@ -36,5 +36,13 @@ func migrate(db *sql.DB) error {
 			value TEXT NOT NULL
 		);
 	`)
-	return err
+	if err != nil {
+		return err
+	}
+
+	// Add 'mode' column to existing tables that were created before it existed.
+	// SQLite returns an error if the column already exists, which we can safely ignore.
+	_, _ = db.Exec(`ALTER TABLE rooms ADD COLUMN mode TEXT NOT NULL DEFAULT 'game'`)
+
+	return nil
 }

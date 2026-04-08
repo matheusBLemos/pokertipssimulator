@@ -1,5 +1,6 @@
 import type { Player, PlayerState } from '../../types';
 import { formatChips } from '../../utils/formatChips';
+import PlayingCard from './PlayingCard';
 
 interface PlayerSeatProps {
   player: Player;
@@ -8,6 +9,7 @@ interface PlayerSeatProps {
   isCurrentTurn: boolean;
   isMe: boolean;
   isHost: boolean;
+  hasRound: boolean;
 }
 
 export default function PlayerSeat({
@@ -16,13 +18,16 @@ export default function PlayerSeat({
   isDealer,
   isCurrentTurn,
   isMe,
+  hasRound,
 }: PlayerSeatProps) {
   const isFolded = playerState?.folded ?? false;
   const isAllIn = playerState?.all_in ?? false;
   const bet = playerState?.bet ?? 0;
+  const holeCards = playerState?.hole_cards;
+  const hasCards = hasRound && !isFolded && playerState != null;
 
   return (
-    <div className="relative">
+    <div className="relative flex flex-col items-center gap-1">
       {/* Dealer button */}
       {isDealer && (
         <div className="absolute -top-1 -right-1 w-5 h-5 bg-white text-black rounded-full flex items-center justify-center text-[10px] font-bold z-10 shadow">
@@ -30,7 +35,23 @@ export default function PlayerSeat({
         </div>
       )}
 
-      {/* Player card */}
+      {/* Hole cards */}
+      {hasCards && (
+        <div className="flex gap-0.5">
+          {holeCards && holeCards.length > 0 ? (
+            holeCards.map((card, i) => (
+              <PlayingCard key={i} card={card} size="sm" />
+            ))
+          ) : (
+            <>
+              <PlayingCard faceDown size="sm" />
+              <PlayingCard faceDown size="sm" />
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Player info */}
       <div
         className={`w-20 rounded-lg p-1.5 text-center transition-all ${
           isFolded

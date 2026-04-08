@@ -3,19 +3,20 @@ package handler
 import (
 	"github.com/gofiber/fiber/v2"
 
-	"pokertipssimulator/internal/adapter/ws"
 	"pokertipssimulator/internal/application"
 	"pokertipssimulator/internal/application/dto"
+	"pokertipssimulator/internal/application/port"
 	"pokertipssimulator/internal/domain/entity"
+	"pokertipssimulator/internal/domain/event"
 )
 
 type ActionHandler struct {
-	uc  *application.ActionUseCase
-	hub *ws.Hub
+	uc          *application.ActionUseCase
+	broadcaster port.WSBroadcaster
 }
 
-func NewActionHandler(uc *application.ActionUseCase, hub *ws.Hub) *ActionHandler {
-	return &ActionHandler{uc: uc, hub: hub}
+func NewActionHandler(uc *application.ActionUseCase, broadcaster port.WSBroadcaster) *ActionHandler {
+	return &ActionHandler{uc: uc, broadcaster: broadcaster}
 }
 
 func (h *ActionHandler) PerformAction(c *fiber.Ctx) error {
@@ -32,13 +33,15 @@ func (h *ActionHandler) PerformAction(c *fiber.Ctx) error {
 		return err
 	}
 
-	h.hub.BroadcastToRoom(roomID, ws.NewMessage(ws.MsgTypeActionPerformed, map[string]interface{}{
+	h.broadcaster.BroadcastToRoom(roomID, string(event.ActionPerformed), map[string]interface{}{
 		"player_id": playerID,
 		"action":    req.Type,
 		"amount":    req.Amount,
-	}))
+	})
 
-	h.hub.BroadcastToRoom(roomID, ws.NewMessage(ws.MsgTypeRoomState, room))
+	h.broadcaster.BroadcastPerPlayer(roomID, string(event.RoomStateChanged), func(pid string) interface{} {
+		return room.FilterForPlayer(pid)
+	})
 
-	return c.JSON(room)
+	return c.JSON(room.FilterForPlayer(playerID))
 }

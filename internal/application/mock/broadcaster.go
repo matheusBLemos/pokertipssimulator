@@ -46,6 +46,10 @@ func (b *WSBroadcaster) SendToPlayer(roomID, playerID string, msgType string, pa
 	})
 }
 
+func (b *WSBroadcaster) BroadcastPerPlayer(roomID string, msgType string, buildPayload func(playerID string) interface{}) {
+	// no-op in mock: individual payloads depend on connected clients
+}
+
 func (b *WSBroadcaster) Reset() {
 	b.mu.Lock()
 	defer b.mu.Unlock()

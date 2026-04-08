@@ -3,18 +3,19 @@ package handler
 import (
 	"github.com/gofiber/fiber/v2"
 
-	"pokertipssimulator/internal/adapter/ws"
 	"pokertipssimulator/internal/application"
 	"pokertipssimulator/internal/application/dto"
+	"pokertipssimulator/internal/application/port"
+	"pokertipssimulator/internal/domain/event"
 )
 
 type GameHandler struct {
-	uc  *application.GameUseCase
-	hub *ws.Hub
+	uc          *application.GameUseCase
+	broadcaster port.WSBroadcaster
 }
 
-func NewGameHandler(uc *application.GameUseCase, hub *ws.Hub) *GameHandler {
-	return &GameHandler{uc: uc, hub: hub}
+func NewGameHandler(uc *application.GameUseCase, broadcaster port.WSBroadcaster) *GameHandler {
+	return &GameHandler{uc: uc, broadcaster: broadcaster}
 }
 
 func (h *GameHandler) StartRound(c *fiber.Ctx) error {
@@ -26,8 +27,10 @@ func (h *GameHandler) StartRound(c *fiber.Ctx) error {
 		return err
 	}
 
-	h.hub.BroadcastToRoom(roomID, ws.NewMessage(ws.MsgTypeRoundStarted, room))
-	return c.JSON(room)
+	h.broadcaster.BroadcastPerPlayer(roomID, string(event.RoundStarted), func(pid string) interface{} {
+		return room.FilterForPlayer(pid)
+	})
+	return c.JSON(room.FilterForPlayer(playerID))
 }
 
 func (h *GameHandler) AdvanceStreet(c *fiber.Ctx) error {
@@ -39,8 +42,10 @@ func (h *GameHandler) AdvanceStreet(c *fiber.Ctx) error {
 		return err
 	}
 
-	h.hub.BroadcastToRoom(roomID, ws.NewMessage(ws.MsgTypeStreetAdvanced, room))
-	return c.JSON(room)
+	h.broadcaster.BroadcastPerPlayer(roomID, string(event.StreetAdvanced), func(pid string) interface{} {
+		return room.FilterForPlayer(pid)
+	})
+	return c.JSON(room.FilterForPlayer(playerID))
 }
 
 func (h *GameHandler) SettleRound(c *fiber.Ctx) error {
@@ -57,7 +62,20 @@ func (h *GameHandler) SettleRound(c *fiber.Ctx) error {
 		return err
 	}
 
-	h.hub.BroadcastToRoom(roomID, ws.NewMessage(ws.MsgTypeSettlement, room))
+	h.broadcaster.BroadcastToRoom(roomID, string(event.Settlement), room)
+	return c.JSON(room)
+}
+
+func (h *GameHandler) AutoSettleRound(c *fiber.Ctx) error {
+	roomID := c.Params("roomId")
+	playerID := c.Locals("playerID").(string)
+
+	room, err := h.uc.SettleRound(c.Context(), roomID, playerID, dto.SettleRequest{})
+	if err != nil {
+		return err
+	}
+
+	h.broadcaster.BroadcastToRoom(roomID, string(event.Settlement), room)
 	return c.JSON(room)
 }
 
@@ -70,11 +88,11 @@ func (h *GameHandler) PauseGame(c *fiber.Ctx) error {
 		return err
 	}
 
-	msgType := ws.MsgTypeGamePaused
+	msgType := event.GamePaused
 	if room.Status == "playing" {
-		msgType = ws.MsgTypeGameResumed
+		msgType = event.GameResumed
 	}
-	h.hub.BroadcastToRoom(roomID, ws.NewMessage(msgType, room))
+	h.broadcaster.BroadcastToRoom(roomID, string(msgType), room)
 	return c.JSON(room)
 }
 
@@ -92,7 +110,7 @@ func (h *GameHandler) Rebuy(c *fiber.Ctx) error {
 		return err
 	}
 
-	h.hub.BroadcastToRoom(roomID, ws.NewMessage(ws.MsgTypeStackUpdated, room))
+	h.broadcaster.BroadcastToRoom(roomID, string(event.StackUpdated), room)
 	return c.JSON(room)
 }
 
@@ -106,6 +124,6 @@ func (h *GameHandler) KickPlayer(c *fiber.Ctx) error {
 		return err
 	}
 
-	h.hub.BroadcastToRoom(roomID, ws.NewMessage(ws.MsgTypePlayerLeft, map[string]string{"player_id": targetID}))
+	h.broadcaster.BroadcastToRoom(roomID, string(event.PlayerLeft), map[string]string{"player_id": targetID})
 	return c.JSON(room)
 }
