@@ -1,8 +1,12 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
-import HomePage from './pages/HomePage';
-import LobbyPage from './pages/LobbyPage';
-import TablePage from './pages/TablePage';
+import MainMenuPage from './pages/MainMenuPage';
+import TipsHomePage from './pages/tips/TipsHomePage';
+import TipsLobbyPage from './pages/tips/TipsLobbyPage';
+import TipsTablePage from './pages/tips/TipsTablePage';
+import GameHomePage from './pages/game/GameHomePage';
+import GameLobbyPage from './pages/game/GameLobbyPage';
+import GameTablePage from './pages/game/GameTablePage';
 
 export default function App() {
   return (
@@ -18,9 +22,16 @@ export default function App() {
         }}
       />
       <Routes>
-        <Route path="/" element={<HomePage />} />
-        <Route path="/room/:roomId/lobby" element={<LobbyPage />} />
-        <Route path="/room/:roomId/table" element={<TablePage />} />
+        <Route path="/" element={<MainMenuPage />} />
+
+        <Route path="/tips" element={<TipsHomePage />} />
+        <Route path="/tips/lobby" element={<TipsLobbyPage />} />
+        <Route path="/tips/table" element={<TipsTablePage />} />
+
+        <Route path="/game" element={<GameHomePage />} />
+        <Route path="/game/lobby" element={<GameLobbyPage />} />
+        <Route path="/game/table" element={<GameTablePage />} />
+
         <Route
           path="*"
           element={

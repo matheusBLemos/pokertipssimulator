@@ -81,7 +81,7 @@ function CreateForm({
     }
     setLoading(true);
     try {
-      const res = await api.createRoom(name.trim(), gameMode, stack);
+      const res = await api.createRoom(name.trim(), gameMode, stack, 'game');
       const claims = parseToken(res.token);
       onCreated(res.token, res.room_id, claims.player_id);
     } catch (err) {

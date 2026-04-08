@@ -14,8 +14,8 @@ profile.cov
 go.work
 go.work.sum
 
-# Backend binary
-backend/server
+# Go binary
+server
 
 # Node
 frontend/node_modules/
@@ -37,5 +37,7 @@ frontend/.vite/
 .DS_Store
 Thumbs.db
 
-# Docker
-mongo_data/
+# Database
+*.db
+*.db-shm
+*.db-wal

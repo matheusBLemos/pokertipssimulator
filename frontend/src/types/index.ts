@@ -78,9 +78,12 @@ export interface Round {
   is_complete: boolean;
 }
 
+export type RoomMode = 'game' | 'tips';
+
 export interface Room {
   id: string;
   code: string;
+  mode: RoomMode;
   status: RoomStatus;
   host_player_id: string;
   config: RoomConfig;

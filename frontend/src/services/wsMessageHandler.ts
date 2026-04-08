@@ -67,7 +67,13 @@ export function handleWSMessage(msg: WSMessage) {
       break;
 
     case 'stack_updated':
+    case 'chips_transferred':
       setRoom(msg.payload as Room);
+      break;
+
+    case 'blind_level_changed':
+      setRoom(msg.payload as Room);
+      toast('Blind level advanced');
       break;
 
     case 'error': {

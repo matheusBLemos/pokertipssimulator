@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { api } from '../services/api';
+import { gameApi } from '../services/api';
 import { useRoomStore } from '../store/roomStore';
 import type { ActionType } from '../types';
 import toast from 'react-hot-toast';
@@ -12,7 +12,7 @@ export function useGameActions() {
     async (type: ActionType, amount?: number) => {
       if (!room) return;
       try {
-        const updated = await api.performAction(room.id, type, amount);
+        const updated = await gameApi.performAction(room.id, type, amount);
         setRoom(updated);
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Action failed');
@@ -24,7 +24,7 @@ export function useGameActions() {
   const startRound = useCallback(async () => {
     if (!room) return;
     try {
-      const updated = await api.startRound(room.id);
+      const updated = await gameApi.startRound(room.id);
       setRoom(updated);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to start round');
@@ -34,7 +34,7 @@ export function useGameActions() {
   const advanceStreet = useCallback(async () => {
     if (!room) return;
     try {
-      const updated = await api.advanceStreet(room.id);
+      const updated = await gameApi.advanceStreet(room.id);
       setRoom(updated);
     } catch (err) {
       toast.error(
@@ -47,7 +47,7 @@ export function useGameActions() {
     async (winners: { pot_index: number; player_ids: string[] }[]) => {
       if (!room) return;
       try {
-        const updated = await api.settleRound(room.id, winners);
+        const updated = await gameApi.settleRound(room.id, winners);
         setRoom(updated);
       } catch (err) {
         toast.error(
@@ -61,7 +61,7 @@ export function useGameActions() {
   const pauseGame = useCallback(async () => {
     if (!room) return;
     try {
-      const updated = await api.pauseGame(room.id);
+      const updated = await gameApi.pauseGame(room.id);
       setRoom(updated);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to toggle pause');
