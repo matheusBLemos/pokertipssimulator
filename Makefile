@@ -2,6 +2,8 @@
        build-frontend embed-frontend build-all build-windows build-mac build-linux \
        wails-dev wails-build wails-build-mac wails-build-windows wails-build-linux
 
+WAILS := $(shell go env GOPATH)/bin/wails
+
 # ── Development ──────────────────────────────────────────────
 
 dev: dev-backend dev-frontend
@@ -13,7 +15,7 @@ dev-frontend:
 	cd frontend && npm run dev
 
 wails-dev:
-	wails dev
+	$(WAILS) dev
 
 test:
 	go test ./...
@@ -27,16 +29,22 @@ clean:
 # ── Wails Build (Desktop App) ───────────────────────────────
 
 wails-build:
-	wails build
+	rm -rf build/bin
+	$(WAILS) build
 
 wails-build-mac:
-	wails build -platform darwin/arm64
+	rm -rf build/bin
+	dot_clean . 2>/dev/null || true
+	$(WAILS) build -platform darwin/arm64 2>&1 || ( \
+		xattr -cr build/bin && \
+		codesign --force --deep --sign - build/bin/pokertips.app \
+	)
 
 wails-build-windows:
-	wails build -platform windows/amd64
+	$(WAILS) build -platform windows/amd64
 
 wails-build-linux:
-	wails build -platform linux/amd64
+	$(WAILS) build -platform linux/amd64
 
 # ── Headless Build (Server Only) ────────────────────────────
 
