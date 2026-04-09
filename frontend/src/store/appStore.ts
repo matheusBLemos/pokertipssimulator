@@ -4,10 +4,10 @@ type AppMode = 'tips' | 'game';
 type ServerStatus = 'stopped' | 'starting' | 'running' | 'error';
 
 export interface ConnectionInfo {
-  localIP: string;
-  publicIP: string;
+  local_ip: string;
+  public_ip: string;
   port: number;
-  upnpOK: boolean;
+  upnp_ok: boolean;
 }
 
 interface AppState {

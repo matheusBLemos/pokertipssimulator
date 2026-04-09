@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAppStore, type ConnectionInfo as ConnInfo } from '../../store/appStore';
 import { isWailsEnvironment, getConnectionInfo } from '../../services/wailsClient';
+import { getBaseUrl } from '../../utils/constants';
 import toast from 'react-hot-toast';
 
 interface ConnectionInfoProps {
@@ -36,8 +37,8 @@ export default function ConnectionInfoPanel({ roomCode, port }: ConnectionInfoPr
 
   if (!info) return null;
 
-  const lanAddress = info.localIP ? `${info.localIP}:${info.port}` : null;
-  const publicAddress = info.publicIP ? `${info.publicIP}:${info.port}` : null;
+  const lanAddress = info.local_ip ? `${info.local_ip}:${info.port}` : null;
+  const publicAddress = info.public_ip ? `${info.public_ip}:${info.port}` : null;
 
   const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
@@ -76,11 +77,11 @@ export default function ConnectionInfoPanel({ roomCode, port }: ConnectionInfoPr
         <div className="flex items-center gap-2 text-xs">
           <span
             className={`w-2 h-2 rounded-full ${
-              info.upnpOK ? 'bg-green-500' : 'bg-yellow-500'
+              info.upnp_ok ? 'bg-green-500' : 'bg-yellow-500'
             }`}
           />
           <span className="text-gray-500">
-            {info.upnpOK
+            {info.upnp_ok
               ? 'Port mapped automatically (UPnP)'
               : 'Manual port forwarding may be required for internet play'}
           </span>
@@ -121,14 +122,14 @@ function InfoRow({
 
 async function fetchConnectionInfoFromApi(port: number): Promise<ConnInfo | null> {
   try {
-    const res = await fetch(`/api/v1/connection-info`);
+    const res = await fetch(`${getBaseUrl()}/api/v1/connection-info`);
     if (!res.ok) return null;
     const data = await res.json();
     return {
-      localIP: data.local_ip ?? '',
-      publicIP: data.public_ip ?? '',
+      local_ip: data.local_ip ?? '',
+      public_ip: data.public_ip ?? '',
       port: data.port ?? port,
-      upnpOK: data.upnp_ok ?? false,
+      upnp_ok: data.upnp_ok ?? false,
     };
   } catch {
     return null;
