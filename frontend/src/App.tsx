@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { HashRouter, Routes, Route } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import MainMenuPage from './pages/MainMenuPage';
 import TipsHomePage from './pages/tips/TipsHomePage';
@@ -10,7 +10,7 @@ import GameTablePage from './pages/game/GameTablePage';
 
 export default function App() {
   return (
-    <BrowserRouter>
+    <HashRouter>
       <Toaster
         position="top-center"
         toastOptions={{
@@ -41,6 +41,6 @@ export default function App() {
           }
         />
       </Routes>
-    </BrowserRouter>
+    </HashRouter>
   );
 }

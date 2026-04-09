@@ -15,7 +15,7 @@ go.work
 go.work.sum
 
 # Go binary
-server
+/server
 
 # Node
 frontend/node_modules/
