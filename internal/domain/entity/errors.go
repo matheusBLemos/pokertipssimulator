@@ -19,7 +19,6 @@ var (
 	ErrInvalidCode       = errors.New("invalid room code")
 	ErrRoundComplete     = errors.New("round is already complete")
 	ErrInvalidStreet     = errors.New("invalid street advancement")
-	ErrPlayerEliminated  = errors.New("player is eliminated")
 	ErrWrongRoomMode     = errors.New("operation not supported in this room mode")
 	ErrSamePlayer        = errors.New("cannot transfer chips to yourself")
 	ErrNoBlindLevels     = errors.New("no more blind levels to advance")

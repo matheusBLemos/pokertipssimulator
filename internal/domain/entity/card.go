@@ -88,11 +88,3 @@ func (d *Deck) Deal(n int) []Card {
 	return dealt
 }
 
-func (d *Deck) DealOne() Card {
-	cards := d.Deal(1)
-	return cards[0]
-}
-
-func (d *Deck) Remaining() int {
-	return len(d.Cards)
-}

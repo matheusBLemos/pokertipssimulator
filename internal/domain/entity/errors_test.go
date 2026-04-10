@@ -23,7 +23,6 @@ func TestDomainErrorsAreSentinels(t *testing.T) {
 		ErrInvalidCode,
 		ErrRoundComplete,
 		ErrInvalidStreet,
-		ErrPlayerEliminated,
 	}
 
 	for _, err := range sentinels {

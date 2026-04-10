@@ -83,8 +83,6 @@ func TestActivePlayers(t *testing.T) {
 			{ID: "p2", Status: PlayerStatusWaiting},
 			{ID: "p3", Status: PlayerStatusActive},
 			{ID: "p4", Status: PlayerStatusEliminated},
-			{ID: "p5", Status: PlayerStatusSittingOut},
-			{ID: "p6", Status: PlayerStatusDisconnected},
 		},
 	}
 

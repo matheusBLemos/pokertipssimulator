@@ -3,11 +3,9 @@ package entity
 type PlayerStatus string
 
 const (
-	PlayerStatusWaiting      PlayerStatus = "waiting"
-	PlayerStatusActive       PlayerStatus = "active"
-	PlayerStatusSittingOut   PlayerStatus = "sitting_out"
-	PlayerStatusEliminated   PlayerStatus = "eliminated"
-	PlayerStatusDisconnected PlayerStatus = "disconnected"
+	PlayerStatusWaiting    PlayerStatus = "waiting"
+	PlayerStatusActive     PlayerStatus = "active"
+	PlayerStatusEliminated PlayerStatus = "eliminated"
 )
 
 type Player struct {

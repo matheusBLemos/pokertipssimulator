@@ -133,8 +133,6 @@ export const tipsApi = {
     request<Room>(`/api/v1/tips/rooms/${roomId}/pause`, { method: 'POST' }),
 };
 
-export type SharedApi = ReturnType<typeof buildApi>;
-
-export function getApiForMode(mode?: string): SharedApi {
+export function getApiForMode(mode?: string) {
   return mode === 'tips' ? sharedTips : sharedGame;
 }

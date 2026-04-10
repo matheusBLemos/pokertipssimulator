@@ -8,8 +8,6 @@ export const STREETS: Record<string, string> = {
   showdown: 'Showdown',
 };
 
-export const MAX_SEATS = 10;
-
 export function getBaseUrl(): string {
   const addr = useAppStore.getState().serverAddress;
   if (addr) {

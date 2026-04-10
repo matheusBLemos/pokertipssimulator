@@ -1,6 +1,6 @@
 export type GameMode = 'cash' | 'tournament';
 export type RoomStatus = 'waiting' | 'playing' | 'paused' | 'finished';
-export type PlayerStatus = 'waiting' | 'active' | 'sitting_out' | 'eliminated' | 'disconnected';
+export type PlayerStatus = 'waiting' | 'active' | 'eliminated';
 export type Street = 'preflop' | 'flop' | 'turn' | 'river' | 'showdown';
 export type ActionType = 'fold' | 'check' | 'call' | 'bet' | 'raise' | 'allin';
 

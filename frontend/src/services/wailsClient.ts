@@ -6,9 +6,7 @@ declare global {
       main?: {
         App?: {
           StartServer: (port: number) => Promise<ConnectionInfo>;
-          StopServer: () => Promise<void>;
           GetConnectionInfo: () => Promise<ConnectionInfo>;
-          IsServerRunning: () => Promise<boolean>;
         };
       };
     };
@@ -31,12 +29,6 @@ export async function startServer(port: number): Promise<ConnectionInfo> {
   return app.StartServer(port);
 }
 
-export async function stopServer(): Promise<void> {
-  const app = getApp();
-  if (!app) return;
-  return app.StopServer();
-}
-
 export async function getConnectionInfo(): Promise<ConnectionInfo> {
   const app = getApp();
   if (!app) {
@@ -45,8 +37,3 @@ export async function getConnectionInfo(): Promise<ConnectionInfo> {
   return app.GetConnectionInfo();
 }
 
-export async function isServerRunning(): Promise<boolean> {
-  const app = getApp();
-  if (!app) return false;
-  return app.IsServerRunning();
-}
