@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { gameApi } from '../../services/api';
 import { useRoomStore } from '../../store/roomStore';
 import { useAppStore } from '../../store/appStore';
@@ -10,7 +10,9 @@ import toast from 'react-hot-toast';
 export default function GameHomePage() {
   const navigate = useNavigate();
   const setAuth = useRoomStore((s) => s.setAuth);
-  const [mode, setMode] = useState<'menu' | 'create' | 'join'>('menu');
+  const [searchParams] = useSearchParams();
+  const codeFromUrl = searchParams.get('code') || '';
+  const [mode, setMode] = useState<'menu' | 'create' | 'join'>(codeFromUrl ? 'join' : 'menu');
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
@@ -57,6 +59,7 @@ export default function GameHomePage() {
 
         {mode === 'join' && (
           <JoinGameForm
+            initialCode={codeFromUrl}
             onBack={() => setMode('menu')}
             onJoined={(token, _roomId, playerId) => {
               setAuth(token, playerId, false);
@@ -197,13 +200,15 @@ function CreateGameForm({
 }
 
 function JoinGameForm({
+  initialCode = '',
   onBack,
   onJoined,
 }: {
+  initialCode?: string;
   onBack: () => void;
   onJoined: (token: string, roomId: string, playerId: string) => void;
 }) {
-  const [code, setCode] = useState('');
+  const [code, setCode] = useState(initialCode);
   const [name, setName] = useState('');
   const [serverAddr, setServerAddr] = useState('');
   const [loading, setLoading] = useState(false);

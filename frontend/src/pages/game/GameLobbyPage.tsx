@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { gameApi } from '../../services/api';
 import { useRoomStore } from '../../store/roomStore';
+import { useAppStore } from '../../store/appStore';
 import { useWebSocket } from '../../hooks/useWebSocket';
 import SeatPicker from '../../components/lobby/SeatPicker';
 import PlayerList from '../../components/lobby/PlayerList';
@@ -88,18 +89,24 @@ export default function GameLobbyPage() {
         </div>
         <button
           onClick={() => {
-            navigator.clipboard.writeText(room.code);
-            toast.success('Code copied!');
+            const info = useAppStore.getState().connectionInfo;
+            const base = info?.local_url || info?.public_url;
+            if (base) {
+              const url = `${base.replace(/\/+$/, '')}/#/game?code=${room.code}`;
+              navigator.clipboard.writeText(url);
+              toast.success('Join link copied!');
+            } else {
+              navigator.clipboard.writeText(room.code);
+              toast.success('Code copied!');
+            }
           }}
           className="px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm transition-colors"
         >
-          Copy Code
+          Copy Link
         </button>
       </div>
 
-      {isHost && (
-        <ConnectionInfoPanel roomCode={room.code} port={8080} />
-      )}
+      {isHost && <ConnectionInfoPanel roomCode={room.code} />}
 
       <SeatPicker
         maxSeats={room.config.max_players}

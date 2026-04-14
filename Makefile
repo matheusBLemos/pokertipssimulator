@@ -33,12 +33,16 @@ wails-build:
 	$(WAILS) build
 
 wails-build-mac:
-	rm -rf build/bin
-	dot_clean . 2>/dev/null || true
-	$(WAILS) build -platform darwin/arm64 2>&1 || ( \
-		xattr -cr build/bin && \
-		codesign --force --deep --sign - build/bin/pokertips.app \
-	)
+	@rm -rf build/bin
+	@dot_clean . 2>/dev/null || true
+	@echo "→ wails build darwin/arm64 (signing errors are expected and handled below)"
+	@$(WAILS) build -platform darwin/arm64 >/tmp/wails-build.log 2>&1; \
+		if [ ! -d build/bin/pokertips.app ]; then \
+			echo "✗ wails build failed:"; cat /tmp/wails-build.log; exit 1; \
+		fi
+	@xattr -cr build/bin/pokertips.app
+	@codesign --force --deep --sign - build/bin/pokertips.app 2>/dev/null
+	@echo "✓ build/bin/pokertips.app (adhoc-signed)"
 
 wails-build-windows:
 	$(WAILS) build -platform windows/amd64

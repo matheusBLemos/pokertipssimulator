@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAppStore, type ConnectionInfo as ConnInfo } from '../../store/appStore';
 import { isWailsEnvironment, getConnectionInfo } from '../../services/wailsClient';
 import { getBaseUrl } from '../../utils/constants';
@@ -6,13 +6,17 @@ import toast from 'react-hot-toast';
 
 interface ConnectionInfoProps {
   roomCode: string;
-  port?: number;
 }
 
-export default function ConnectionInfoPanel({ roomCode, port }: ConnectionInfoProps) {
+function buildJoinLink(baseUrl: string, roomCode: string): string {
+  return `${baseUrl.replace(/\/+$/, '')}/#/game?code=${roomCode}`;
+}
+
+export default function ConnectionInfoPanel({ roomCode }: ConnectionInfoProps) {
   const storeInfo = useAppStore((s) => s.connectionInfo);
   const setConnectionInfo = useAppStore((s) => s.setConnectionInfo);
   const [info, setInfo] = useState<ConnInfo | null>(storeInfo);
+  const autoCopied = useRef(false);
 
   useEffect(() => {
     if (storeInfo) {
@@ -25,20 +29,36 @@ export default function ConnectionInfoPanel({ roomCode, port }: ConnectionInfoPr
         setConnectionInfo(ci);
         setInfo(ci);
       }).catch(() => {});
-    } else if (port) {
-      fetchConnectionInfoFromApi(port).then((ci) => {
+    } else {
+      fetchConnectionInfoFromApi().then((ci) => {
         if (ci) {
           setConnectionInfo(ci);
           setInfo(ci);
         }
       });
     }
-  }, [storeInfo, port, setConnectionInfo]);
+  }, [storeInfo, setConnectionInfo]);
+
+  // Auto-copy the best URL when info first becomes available
+  useEffect(() => {
+    if (!info || autoCopied.current) return;
+    autoCopied.current = true;
+
+    const lanUrl = info.local_url ? buildJoinLink(info.local_url, roomCode) : null;
+    const publicUrl = info.public_url ? buildJoinLink(info.public_url, roomCode) : null;
+
+    const url = lanUrl || publicUrl;
+    if (url) {
+      navigator.clipboard.writeText(url).then(() => {
+        toast.success('Join link copied to clipboard!');
+      }).catch(() => {});
+    }
+  }, [info, roomCode]);
 
   if (!info) return null;
 
-  const lanAddress = info.local_ip ? `${info.local_ip}:${info.port}` : null;
-  const publicAddress = info.public_ip ? `${info.public_ip}:${info.port}` : null;
+  const lanUrl = info.local_url ? buildJoinLink(info.local_url, roomCode) : null;
+  const publicUrl = info.public_url ? buildJoinLink(info.public_url, roomCode) : null;
 
   const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
@@ -58,19 +78,19 @@ export default function ConnectionInfoPanel({ roomCode, port }: ConnectionInfoPr
           onCopy={() => copyToClipboard(roomCode, 'Room code')}
         />
 
-        {lanAddress && (
+        {lanUrl && (
           <InfoRow
-            label="LAN"
-            value={lanAddress}
-            onCopy={() => copyToClipboard(lanAddress, 'LAN address')}
+            label="LAN Link"
+            value={lanUrl}
+            onCopy={() => copyToClipboard(lanUrl, 'LAN link')}
           />
         )}
 
-        {publicAddress && (
+        {publicUrl && (
           <InfoRow
-            label="Internet"
-            value={publicAddress}
-            onCopy={() => copyToClipboard(publicAddress, 'Public address')}
+            label="Internet Link"
+            value={publicUrl}
+            onCopy={() => copyToClipboard(publicUrl, 'Internet link')}
           />
         )}
 
@@ -89,7 +109,7 @@ export default function ConnectionInfoPanel({ roomCode, port }: ConnectionInfoPr
       </div>
 
       <p className="text-xs text-gray-600">
-        Share the LAN address with friends on the same network, or the Internet address for remote play.
+        Share the LAN link with friends on the same network, or the Internet link for remote play.
       </p>
     </div>
   );
@@ -106,13 +126,13 @@ function InfoRow({
 }) {
   return (
     <div className="flex items-center justify-between bg-gray-800/50 rounded-lg px-3 py-2">
-      <div>
+      <div className="min-w-0 flex-1 mr-2">
         <span className="text-xs text-gray-500">{label}</span>
-        <p className="text-white font-mono text-sm">{value}</p>
+        <p className="text-white font-mono text-sm truncate">{value}</p>
       </div>
       <button
         onClick={onCopy}
-        className="px-2 py-1 text-xs bg-gray-700 hover:bg-gray-600 rounded text-gray-300 transition-colors"
+        className="shrink-0 px-2 py-1 text-xs bg-gray-700 hover:bg-gray-600 rounded text-gray-300 transition-colors"
       >
         Copy
       </button>
@@ -120,7 +140,7 @@ function InfoRow({
   );
 }
 
-async function fetchConnectionInfoFromApi(port: number): Promise<ConnInfo | null> {
+async function fetchConnectionInfoFromApi(): Promise<ConnInfo | null> {
   try {
     const res = await fetch(`${getBaseUrl()}/api/v1/connection-info`);
     if (!res.ok) return null;
@@ -128,8 +148,10 @@ async function fetchConnectionInfoFromApi(port: number): Promise<ConnInfo | null
     return {
       local_ip: data.local_ip ?? '',
       public_ip: data.public_ip ?? '',
-      port: data.port ?? port,
+      port: data.port ?? 0,
       upnp_ok: data.upnp_ok ?? false,
+      local_url: data.local_url ?? '',
+      public_url: data.public_url ?? '',
     };
   } catch {
     return null;

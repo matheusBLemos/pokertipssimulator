@@ -8,6 +8,8 @@ export interface ConnectionInfo {
   public_ip: string;
   port: number;
   upnp_ok: boolean;
+  local_url: string;
+  public_url: string;
 }
 
 interface AppState {

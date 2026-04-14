@@ -93,9 +93,7 @@ export default function TipsLobbyPage() {
         </button>
       </div>
 
-      {isHost && (
-        <ConnectionInfoPanel roomCode={room.code} port={8080} />
-      )}
+      {isHost && <ConnectionInfoPanel roomCode={room.code} />}
 
       <SeatPicker
         maxSeats={room.config.max_players}

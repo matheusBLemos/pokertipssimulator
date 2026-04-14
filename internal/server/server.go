@@ -2,8 +2,13 @@ package server
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
+	"io/fs"
+	"log"
+	"net"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -23,17 +28,18 @@ import (
 )
 
 type Server struct {
-	app     *fiber.App
-	hub     *ws.Hub
-	db      *sql.DB
-	port    string
-	running bool
-	mu      sync.Mutex
-	connInfo appport.ConnectionInfo
+	app        *fiber.App
+	hub        *ws.Hub
+	db         *sql.DB
+	port       string
+	running    bool
+	mu         sync.Mutex
+	connInfo   appport.ConnectionInfo
+	frontendFS fs.FS
 }
 
-func New() *Server {
-	return &Server{}
+func New(frontendFS fs.FS) *Server {
+	return &Server{frontendFS: frontendFS}
 }
 
 func (s *Server) Start(port, dbPath, jwtSecret string) error {
@@ -44,11 +50,15 @@ func (s *Server) Start(port, dbPath, jwtSecret string) error {
 		return fmt.Errorf("server is already running")
 	}
 
+	log.Printf("server start: port=%s dbPath=%s", port, dbPath)
+
 	db, err := database.OpenSQLite(dbPath)
 	if err != nil {
+		log.Printf("server start: sqlite open failed: %v", err)
 		return fmt.Errorf("failed to open SQLite: %w", err)
 	}
 	s.db = db
+	log.Printf("server start: sqlite ready")
 
 	roomRepo := repository.NewSQLiteRoomRepository(db)
 	jwtService := auth.NewJWTService(jwtSecret)
@@ -69,11 +79,14 @@ func (s *Server) Start(port, dbPath, jwtSecret string) error {
 	wsHandler := handler.NewWSHandler(hub, roomUC)
 
 	app := fiber.New(fiber.Config{
-		ErrorHandler: handler.ErrorHandler,
+		ErrorHandler:          handler.ErrorHandler,
+		DisableStartupMessage: true,
 	})
 
 	app.Use(recover.New())
-	app.Use(logger.New())
+	app.Use(logger.New(logger.Config{
+		Output: log.Writer(),
+	}))
 	app.Use(cors.New(cors.Config{
 		AllowOriginsFunc: func(origin string) bool { return true },
 		AllowHeaders:     "Origin, Content-Type, Accept, Authorization",
@@ -88,7 +101,7 @@ func (s *Server) Start(port, dbPath, jwtSecret string) error {
 		return c.JSON(info)
 	})
 
-	frontend.RegisterSPA(app)
+	frontend.RegisterSPA(app, s.frontendFS)
 
 	s.app = app
 	s.port = port
@@ -99,30 +112,41 @@ func (s *Server) Start(port, dbPath, jwtSecret string) error {
 		localIP = localIPs[0]
 	}
 	publicIP := network.GetPublicIP()
+	portNum := portToInt(port)
 
 	s.connInfo = appport.ConnectionInfo{
-		LocalIP:  localIP,
-		PublicIP: publicIP,
-		Port:     portToInt(port),
-		UPnPOK:   false,
+		LocalIP:   localIP,
+		PublicIP:  publicIP,
+		Port:      portNum,
+		UPnPOK:    false,
+		LocalURL:  buildURL(localIP, portNum),
+		PublicURL: buildURL(publicIP, portNum),
 	}
 
-	errCh := make(chan error, 1)
+	ln, err := net.Listen("tcp", "0.0.0.0:"+port)
+	if err != nil {
+		log.Printf("server listen error: %v", err)
+		s.db.Close()
+		s.db = nil
+		if isAddrInUse(err) {
+			return fmt.Errorf("port %s is already in use — close the other program or choose a different port", port)
+		}
+		return fmt.Errorf("failed to bind port %s: %w", port, err)
+	}
+
 	go func() {
-		if err := app.Listen("0.0.0.0:" + port); err != nil {
-			errCh <- err
+		if serveErr := app.Listener(ln); serveErr != nil {
+			log.Printf("fiber serve error: %v", serveErr)
 		}
 	}()
 
-	// Give the server a moment to start or fail
-	select {
-	case err := <-errCh:
-		s.db.Close()
-		return fmt.Errorf("failed to start server: %w", err)
-	case <-time.After(500 * time.Millisecond):
-		s.running = true
-		return nil
-	}
+	s.running = true
+	log.Printf("server start: listening on %s", ln.Addr().String())
+	return nil
+}
+
+func isAddrInUse(err error) bool {
+	return errors.Is(err, syscall.EADDRINUSE)
 }
 
 func (s *Server) Stop() error {
@@ -177,4 +201,11 @@ func portToInt(p string) int {
 		}
 	}
 	return n
+}
+
+func buildURL(ip string, port int) string {
+	if ip == "" || port == 0 {
+		return ""
+	}
+	return fmt.Sprintf("http://%s:%d", ip, port)
 }
